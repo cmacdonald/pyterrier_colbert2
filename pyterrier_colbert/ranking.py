@@ -20,7 +20,7 @@ colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_chec
 from colbert.infra import ColBERTConfig, Run, RunConfig  # 确认这些路径正确
 from colbert.indexing.loaders import get_parts, load_doclens
 from colbert.modeling.colbert import ColBERT  # 确认这些路径正确
-from colbert.search import slow_rerank  # 确认这些路径正确
+# from colbert.search import slow_rerank  # 确认这些路径正确
 
 
 import colbert.modeling.colbert
