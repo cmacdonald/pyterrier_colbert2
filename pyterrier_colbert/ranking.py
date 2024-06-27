@@ -254,17 +254,18 @@ class ColBERTModelOnlyFactory():
             
         # args.inference = ModelInference(args.colbert, amp=args.amp)
         # self.args = args
+
         if isinstance(colbert_model, str):
-            config = ColBERTConfig.load_from_checkpoint(colbert_model)
-            self.colbert = ColBERT.from_checkpoint(colbert_model, colbert_config=config)
+            self.colbert = ColBERT.from_pretrained(colbert_model)  # 使用 from_pretrained 方法
         else:
             assert isinstance(colbert_model, tuple)
             self.colbert, self.checkpoint = colbert_model
             assert isinstance(self.colbert, ColBERT)
             assert isinstance(self.checkpoint, dict)
-
-        self.inference = self.colbert.inference
+        
+        self.inference = self.colbert.inference  # 从模型中获取推理对象
         self.args = args
+
                 
     def query_encoder(self, detach=True) -> pt.Transformer:
         """
