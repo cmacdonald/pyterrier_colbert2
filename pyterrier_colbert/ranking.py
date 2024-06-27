@@ -17,9 +17,10 @@ colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_chec
 # from colbert.modeling.inference import ModelInference
 # from colbert.evaluation.slow import slow_rerank
 # from colbert.indexing.loaders import get_parts, load_doclens
-from colbert.infra import ColBERTConfig, Run, RunConfig  # 修改导入路径
+from colbert.infra import ColBERTConfig, Run, RunConfig  # 确认这些路径正确
 from colbert.indexing.loaders import get_parts, load_doclens
-from colbert import ColBERT  # 修改导入路径
+from colbert.modeling.colbert import ColBERT  # 确认这些路径正确
+from colbert.search import slow_rerank  # 确认这些路径正确
 
 
 import colbert.modeling.colbert
@@ -220,7 +221,7 @@ class ColBERTModelOnlyFactory():
 
     def __init__(self, 
             # colbert_model : Union[str, Tuple[colbert.modeling.colbert.ColBERT, dict]], gpu=True, mask_punctuation=False, dim=128):
-            colbert_model : Union[str, Tuple[ColBERT, dict]], gpu=True, mask_punctuation=False, dim=128):  # 修改导入路径
+            colbert_model : Union[str, Tuple[ColBERT, dict]], gpu=True, mask_punctuation=False, dim=128):
         args = Object()
         args.query_maxlen = 32
         args.doc_maxlen = 180
@@ -254,17 +255,15 @@ class ColBERTModelOnlyFactory():
         # args.inference = ModelInference(args.colbert, amp=args.amp)
         # self.args = args
         if isinstance(colbert_model, str):
-            args.checkpoint = colbert_model
-            config = ColBERTConfig.load_from_checkpoint(colbert_model)  # 更新代码
-            self.colbert = ColBERT.from_checkpoint(colbert_model, colbert_config=config)  # 更新代码
+            config = ColBERTConfig.load_from_checkpoint(colbert_model)
+            self.colbert = ColBERT.from_checkpoint(colbert_model, colbert_config=config)
         else:
             assert isinstance(colbert_model, tuple)
             self.colbert, self.checkpoint = colbert_model
-            from colbert import ColBERT
             assert isinstance(self.colbert, ColBERT)
             assert isinstance(self.checkpoint, dict)
-            
-        self.inference = self.colbert.inference  # 更新代码
+
+        self.inference = self.colbert.inference
         self.args = args
                 
     def query_encoder(self, detach=True) -> pt.Transformer:
@@ -512,7 +511,7 @@ class ColBERTFactory(ColBERTModelOnlyFactory):
 
     def __init__(self, 
             # colbert_model : Union[str, Tuple[colbert.modeling.colbert.ColBERT, dict]], 
-            colbert_model : Union[str, Tuple[ColBERT, dict]],  # 修改导入路径
+            colbert_model : Union[str, Tuple[ColBERT, dict]], 
             index_root : str, 
             index_name : str,
             faiss_partitions=None,#TODO 100-
