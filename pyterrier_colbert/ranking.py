@@ -14,9 +14,13 @@ from . import load_checkpoint
 import colbert.evaluation.loaders
 colbert.evaluation.loaders.load_checkpoint = load_checkpoint
 colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
-from colbert.modeling.inference import ModelInference
-from colbert.evaluation.slow import slow_rerank
+# from colbert.modeling.inference import ModelInference
+# from colbert.evaluation.slow import slow_rerank
+# from colbert.indexing.loaders import get_parts, load_doclens
+from colbert.infra import ColBERTConfig, Run, RunConfig
+from colbert.infra.config import BaseConfig
 from colbert.indexing.loaders import get_parts, load_doclens
+
 import colbert.modeling.colbert
 from collections import defaultdict
 import numpy as np
@@ -214,7 +218,8 @@ class re_ranker_mmap:
 class ColBERTModelOnlyFactory():
 
     def __init__(self, 
-            colbert_model : Union[str, Tuple[colbert.modeling.colbert.ColBERT, dict]], gpu=True, mask_punctuation=False, dim=128):
+            # colbert_model : Union[str, Tuple[colbert.modeling.colbert.ColBERT, dict]], gpu=True, mask_punctuation=False, dim=128):
+            colbert_model : Union[str, Tuple[ColBERT, dict]], gpu=True, mask_punctuation=False, dim=128):  # 修改导入路径
         args = Object()
         args.query_maxlen = 32
         args.doc_maxlen = 180
@@ -235,19 +240,32 @@ class ColBERTModelOnlyFactory():
             import colbert.modeling.colbert
             colbert.parameters.DEVICE = colbert.evaluation.load_model.DEVICE = colbert.modeling.colbert.DEVICE = torch.device("cpu")
             self.gpu = False
-        if isinstance (colbert_model, str):
+        # if isinstance (colbert_model, str):
+        #     args.checkpoint = colbert_model
+        #     args.colbert, args.checkpoint = load_model(args)
+        # else:
+        #     assert isinstance(colbert_model, tuple)
+        #     args.colbert, args.checkpoint = colbert_model
+        #     from colbert.modeling.colbert import ColBERT
+        #     assert isinstance(args.colbert, ColBERT)
+        #     assert isinstance(args.checkpoint, dict)
+            
+        # args.inference = ModelInference(args.colbert, amp=args.amp)
+        # self.args = args
+        if isinstance(colbert_model, str):
             args.checkpoint = colbert_model
-            args.colbert, args.checkpoint = load_model(args)
+            config = ColBERTConfig.load_from_checkpoint(colbert_model)  # 更新代码
+            self.colbert = ColBERT.from_checkpoint(colbert_model, colbert_config=config)  # 更新代码
         else:
             assert isinstance(colbert_model, tuple)
-            args.colbert, args.checkpoint = colbert_model
-            from colbert.modeling.colbert import ColBERT
-            assert isinstance(args.colbert, ColBERT)
-            assert isinstance(args.checkpoint, dict)
+            self.colbert, self.checkpoint = colbert_model
+            from colbert import ColBERT
+            assert isinstance(self.colbert, ColBERT)
+            assert isinstance(self.checkpoint, dict)
             
-        args.inference = ModelInference(args.colbert, amp=args.amp)
+        self.inference = self.colbert.inference  # 更新代码
         self.args = args
-        
+                
     def query_encoder(self, detach=True) -> pt.Transformer:
         """
         Returns a transformer that can encode queries using ColBERT's model.
@@ -492,7 +510,8 @@ class ColBERTModelOnlyFactory():
 class ColBERTFactory(ColBERTModelOnlyFactory):
 
     def __init__(self, 
-            colbert_model : Union[str, Tuple[colbert.modeling.colbert.ColBERT, dict]], 
+            # colbert_model : Union[str, Tuple[colbert.modeling.colbert.ColBERT, dict]], 
+            colbert_model : Union[str, Tuple[ColBERT, dict]],  # 修改导入路径
             index_root : str, 
             index_name : str,
             faiss_partitions=None,#TODO 100-
