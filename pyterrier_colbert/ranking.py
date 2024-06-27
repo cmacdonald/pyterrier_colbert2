@@ -242,29 +242,29 @@ class ColBERTModelOnlyFactory():
             import colbert.modeling.colbert
             colbert.parameters.DEVICE = colbert.evaluation.load_model.DEVICE = colbert.modeling.colbert.DEVICE = torch.device("cpu")
             self.gpu = False
-        # if isinstance (colbert_model, str):
-        #     args.checkpoint = colbert_model
-        #     args.colbert, args.checkpoint = load_model(args)
-        # else:
-        #     assert isinstance(colbert_model, tuple)
-        #     args.colbert, args.checkpoint = colbert_model
-        #     from colbert.modeling.colbert import ColBERT
-        #     assert isinstance(args.colbert, ColBERT)
-        #     assert isinstance(args.checkpoint, dict)
-            
-        # args.inference = ModelInference(args.colbert, amp=args.amp)
-        # self.args = args
-
-        if isinstance(colbert_model, str):
-            self.colbert = ColBERT.from_checkpoint(colbert_model)  # 使用 from_checkpoint 方法
+        if isinstance (colbert_model, str):
+            args.checkpoint = colbert_model
+            args.colbert, args.checkpoint = load_model(args)
         else:
             assert isinstance(colbert_model, tuple)
-            self.colbert, self.checkpoint = colbert_model
-            assert isinstance(self.colbert, ColBERT)
-            assert isinstance(self.checkpoint, dict)
-
-        self.inference = self.colbert.inference  # 从模型中获取推理对象
+            args.colbert, args.checkpoint = colbert_model
+            from colbert.modeling.colbert import ColBERT
+            assert isinstance(args.colbert, ColBERT)
+            assert isinstance(args.checkpoint, dict)
+            
+        args.inference = ModelInference(args.colbert, amp=args.amp)
         self.args = args
+
+        # if isinstance(colbert_model, str):
+        #     self.colbert = ColBERT.from_checkpoint(colbert_model)  # 使用 from_checkpoint 方法
+        # else:
+        #     assert isinstance(colbert_model, tuple)
+        #     self.colbert, self.checkpoint = colbert_model
+        #     assert isinstance(self.colbert, ColBERT)
+        #     assert isinstance(self.checkpoint, dict)
+
+        # self.inference = self.colbert.inference  # 从模型中获取推理对象
+        # self.args = args
 
                 
     def query_encoder(self, detach=True) -> pt.Transformer:
