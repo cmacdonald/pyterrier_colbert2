@@ -256,13 +256,13 @@ class ColBERTModelOnlyFactory():
         # self.args = args
 
         if isinstance(colbert_model, str):
-            self.colbert = ColBERT.from_pretrained(colbert_model)  # 使用 from_pretrained 方法
+            self.colbert = ColBERT.from_checkpoint(colbert_model)  # 使用 from_checkpoint 方法
         else:
             assert isinstance(colbert_model, tuple)
             self.colbert, self.checkpoint = colbert_model
             assert isinstance(self.colbert, ColBERT)
             assert isinstance(self.checkpoint, dict)
-        
+
         self.inference = self.colbert.inference  # 从模型中获取推理对象
         self.args = args
 
