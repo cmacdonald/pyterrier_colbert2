@@ -17,9 +17,10 @@ colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_chec
 # from colbert.modeling.inference import ModelInference
 # from colbert.evaluation.slow import slow_rerank
 # from colbert.indexing.loaders import get_parts, load_doclens
-from colbert.infra import ColBERTConfig, Run, RunConfig
-from colbert.infra.config import BaseConfig
+from colbert.infra import ColBERTConfig, Run, RunConfig  # 修改导入路径
 from colbert.indexing.loaders import get_parts, load_doclens
+from colbert import ColBERT  # 修改导入路径
+
 
 import colbert.modeling.colbert
 from collections import defaultdict
