@@ -14,7 +14,7 @@ from . import load_checkpoint
 import colbert.evaluation.loaders
 colbert.evaluation.loaders.load_checkpoint = load_checkpoint
 colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
-# from colbert.modeling.inference import ModelInference
+# from colbert.modeling.inference import Checkpoint
 # from colbert.evaluation.slow import slow_rerank
 # from colbert.indexing.loaders import get_parts, load_doclens
 from colbert.infra import ColBERTConfig, Run, RunConfig  # 确认这些路径正确
@@ -252,7 +252,7 @@ class ColBERTModelOnlyFactory():
             assert isinstance(args.colbert, ColBERT)
             assert isinstance(args.checkpoint, dict)
             
-        args.inference = ModelInference(args.colbert, amp=args.amp)
+        args.inference = Checkpoint(args.colbert, amp=args.amp)
         self.args = args
 
         # if isinstance(colbert_model, str):
