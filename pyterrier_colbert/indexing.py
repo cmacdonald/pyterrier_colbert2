@@ -255,102 +255,6 @@ class CollectionEncoder_Generator(CollectionEncoder):
 
         return batch
 
-
-# class ColBERTIndexer(pt.Indexer):
-#     def __init__(self, checkpoint, index_root, index_name, chunksize, prepend_title=False, num_docs=None, ids=True, gpu=True, mask_punctuation=False):
-#         args = Object()
-#         args.similarity = 'cosine'
-#         args.dim = 128
-#         args.query_maxlen = 32
-#         args.doc_maxlen = 180
-#         args.mask_punctuation = mask_punctuation
-#         args.checkpoint = checkpoint
-#         args.bsize = 128
-#         args.collection = None
-#         args.amp = False
-#         args.index_root = index_root
-#         args.index_name = index_name
-#         args.chunksize = chunksize
-#         args.rank = -1
-#         args.index_path = os.path.join(args.index_root, args.index_name)
-#         args.input_arguments = copy.deepcopy(args)
-#         args.nranks, args.distributed = distributed.init(args.rank)
-#         self.saver_queue = queue.Queue(maxsize=3)
-#         args.partitions = 100
-#         args.prepend_title = False
-#         self.args = args
-#         self.args.sample = None
-#         self.args.slices = 1
-#         self.ids = ids
-#         self.prepend_title = prepend_title
-#         self.num_docs = num_docs
-#         self.gpu = gpu
-#         if not gpu:
-#             warn("Gpu disabled, YMMV")
-#             import colbert.parameters
-#             import colbert.evaluation.load_model
-#             import colbert.modeling.colbert
-#             colbert.parameters.DEVICE = colbert.evaluation.load_model.DEVICE = colbert.modeling.colbert.DEVICE = torch.device("cpu")
-
-#         assert self.args.slices >= 1
-#         assert self.args.sample is None or (0.0 < self.args.sample <1.0), self.args.sample
-
-#     def ranking_factory(self, memtype="mem"):
-#         return ColBERTFactory(
-#             (self.colbert, self.checkpoint),
-#             self.args.index_root,
-#             self.args.index_name,
-#             self.args.partitions,
-#             memtype, gpu=self.gpu,
-#             mask_punctuation=self.args.mask_punctuation,
-#             dim=self.args.dim
-#         )
-
-#     def index(self, iterator):
-#         from timeit import default_timer as timer
-#         starttime = timer()
-#         maxdocs = 100
-#         #assert not os.path.exists(self.args.index_path), self.args.index_path
-#         docnos=[]
-#         docid=0
-#         def convert_gen(iterator):
-#             import pyterrier as pt
-#             nonlocal docnos
-#             nonlocal docid
-#             if self.num_docs is not None:
-#                 iterator = pt.tqdm(iterator, total=self.num_docs, desc="encoding", unit="d")
-#             for l in iterator:
-#                 l["docid"] = docid
-#                 docnos.append(l['docno'])
-#                 docid+=1
-#                 yield l              
-#         self.args.generator = convert_gen(iterator)
-#         ceg = CollectionEncoderIds(self.args,0,1) if self.ids else CollectionEncoder_Generator(self.args,0,1)
-
-#         create_directory(self.args.index_root)
-#         create_directory(self.args.index_path)
-#         ceg.encode()
-#         self.colbert = ceg.colbert
-#         self.checkpoint = ceg.checkpoint 
-
-#         assert os.path.exists(self.args.index_path), self.args.index_path
-#         num_embeddings = sum(load_doclens(self.args.index_path))
-#         print("#> num_embeddings =", num_embeddings)
-
-#         import pyterrier as pt
-#         with pt.io.autoopen(os.path.join(self.args.index_path, "docnos.pkl.gz"), "wb") as f:
-#             pickle.dump(docnos, f)
-
-#         if self.args.partitions is None:
-#             self.args.partitions = 1 << math.ceil(math.log2(8 * math.sqrt(num_embeddings)))
-#             warn("You did not specify --partitions!")
-#             warn("Default computation chooses", self.args.partitions,
-#                         "partitions (for {} embeddings)".format(num_embeddings))
-#         index_faiss(self.args)
-#         print("#> Faiss encoding complete")
-#         endtime = timer()
-#         print("#> Indexing complete, Time elapsed %0.2f seconds" % (endtime - starttime))
-
 class ColbertV2Indexer(pt.Indexer):
 
     def __init__(self, index_location, checkpoint, index_name, nbits=2):
@@ -360,18 +264,8 @@ class ColbertV2Indexer(pt.Indexer):
         self.nbits = nbits
 
     def index(self, iter_dict):
-        # temp_tsv_file = "bla.tsv"
         temp_text_file = "temp_texts.tsv"
         temp_docno_file = "temp_docnos.tsv"
-
-        # with open(temp_tsv_file, 'w') as fout:
-        #     for line in iter_dict:
-        #         fout.write("%s\t%s\n" % (line["docno"], line['text']))
-        # with open(temp_tsv_file, 'w') as fout:
-        #     for line_idx, line in enumerate(iter_dict):
-        #         docno = line["docno"]
-        #         cleaned_text = line['text'].replace('\n', ' ').replace('\r', ' ')
-        #         fout.write(f"{line_idx}\t{docno}\t{cleaned_text}\n")
 
         # Write docnos to a permanent file and texts to a temporary file
         with open(temp_text_file, 'w') as text_fout, open(temp_docno_file, 'w') as docno_fout:
@@ -381,51 +275,10 @@ class ColbertV2Indexer(pt.Indexer):
                 text_fout.write(f"{line_idx}\t{cleaned_text}\n")
                 docno_fout.write(f"{line_idx}\t{docno}\n")
 
-        # # Save configuration to a JSON file
-        # config_file = os.path.join(full_index_path, "colbert_config.json")
-        # config_data = {
-        #     "index_location": self.index_location,
-        #     "index_name": self.index_name,
-        #     "nbits": self.nbits
-        # }
-
-        # with open(config_file, 'w') as f:
-        #     json.dump(config_data, f)
-        # # assert exsist
-        # if os.path.exists(temp_tsv_file):
-        #     print(f"File {temp_tsv_file} created successfully.")
-        # else:
-        #     print(f"Failed to create {temp_tsv_file}.")
-        # TODO now call normal colbert indexer with temp_tsv_file
-        # print("TSV file top 5 line:")
-        # with open(temp_tsv_file, 'r') as fin:
-        #     for i in range(5): 
-        #         print(fin.readline().strip())
-        
-        # # Create a ColBERT configuration
-        # indexer = Indexer(checkpoint=self.checkpoint, config=config)
-        
-        # # Call the index method to generate the index
-        # indexer.index(name=os.path.basename(self.index_location), collection=temp_tsv_file)
-        
-        # # Clean up temporary files
-        # os.remove(temp_tsv_file)
-
         if not os.path.exists(self.index_location):
             os.makedirs(self.index_location)
 
-        # # Use single process configuration
-        # with Run().context(RunConfig(nranks=1, experiment=self.index_name,root=self.index_location)):
-        #     # Create a ColBERT configuration
-        #     config = ColBERTConfig(
-        #         nbits=self.nbits,
-        #     )
-        #     indexer = Indexer(checkpoint=self.checkpoint, config=config)
-        #     indexer.index(name=f"{self.index_name}_nbits={self.nbits}", collection=temp_tsv_file, overwrite=True)
-
-        # Use single process configuration
         with Run().context(RunConfig(nranks=1, experiment=self.index_name, root=self.index_location)):
-            # Create a ColBERT configuration
             config = ColBERTConfig(
                 nbits=self.nbits
                 )
@@ -435,17 +288,10 @@ class ColbertV2Indexer(pt.Indexer):
         index_subfolder = f"{self.index_name}_nbits={self.nbits}"
         full_index_path = os.path.join(self.index_location, self.index_name, "indexes", index_subfolder)
         os.makedirs(full_index_path, exist_ok=True)
-        
+
         final_docno_file = os.path.join(full_index_path, "docnos.tsv")
         os.rename(temp_docno_file, final_docno_file)
 
-# if __name__ == "__main__":
-#     index_location = "/mnt/c/Users/DJH/Desktop/code/colbert_v2_index"
-#     colbert_model_path = '/mnt/c/Users/DJH/Desktop/code/colbertv2.0'
-#     index_name = "my_colbert_index"
-#     indxr = ColbertV2Indexer(index_location, colbert_model_path,index_name)
-#     indxr.index(pt.get_dataset('vaswani').get_corpus_iter())
-        
         
 class CollectionEncoderIds(CollectionEncoder_Generator):
     def _encode_batch(self, batch_idx, batch):

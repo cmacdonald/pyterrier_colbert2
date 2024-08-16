@@ -541,29 +541,12 @@ class ColBERTv2Index(ColBERTModelOnlyFactory):
 
     def __init__(self, colbert, index_location, **kwargs):
         super().__init__(colbert, **kwargs)
-        # # Load the configuration from the JSON file
-        # config_file = os.path.join(index_location, "colbert_config.json")
-        # with open(config_file, 'r') as f:
-        #     config_data = json.load(f)
-        #     self.index_name = config_data["index_name"]
-        #     self.nbits = config_data["nbits"]
-
-        # index_subfolder = f"{self.index_name}_nbits={self.nbits}"
-        # full_index_path = os.path.join(index_location, "indexes", index_subfolder)
-        # LOAD index from index_location - colbert.Searcher
         self.searcher = Searcher(index_location)
         self.docno_mapping = {}
 
         # Load the docno mappings from the permanent file
         docno_file = os.path.join(index_location, "docnos.tsv")
 
-        # with open('bla.tsv', 'r') as f:
-        #     for line in f:
-        #         parts = line.strip().split('\t')
-        #         if len(parts) >= 2:
-        #             line_idx = int(parts[0])
-        #             docno = parts[1]
-        #             self.docno_mapping[line_idx] = docno
         with open(docno_file, 'r') as f:
             for line in f:
                 parts = line.strip().split('\t')
@@ -584,12 +567,6 @@ class ColBERTv2Index(ColBERTModelOnlyFactory):
         def _search(df_query):
             # TODO make df_queries into a colbert.Queries object
             assert len(df_query) == 1
-            #queries_dict = {df_query.iloc[0]["qid"] : df_query.iloc[0]["query"]}
-            #queries = Queries(data=queries_dict)
-            # convert Queries to str list
-            #query_texts = [queries[qid] for qid in queries.keys()]
-            #print("[DEBUG] Query Texts:", query_texts) 
-
             # encode Q
             Q = self.searcher.encode([df_query.iloc[0]["query"]])
             print("[DEBUG] Encoded Q shape:", Q.shape) 
