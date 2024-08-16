@@ -1,5 +1,6 @@
 
 import os
+import json
 import torch
 import pandas as pd
 import pyterrier as pt
@@ -14,15 +15,16 @@ from . import load_checkpoint
 import colbert.evaluation.loaders
 colbert.evaluation.loaders.load_checkpoint = load_checkpoint
 colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
-# from colbert.modeling.inference import Checkpoint
+# from colbert.modeling.inference import ModelInference
+from colbert.modeling.checkpoint import Checkpoint  # modified from colbert.inference.checkpoint import Checkpoint
+from colbert.modeling.colbert import ColBERT  # add a new method to use BaseColBERT
 # from colbert.evaluation.slow import slow_rerank
-# from colbert.indexing.loaders import get_parts, load_doclens
-from colbert.infra import ColBERTConfig, Run, RunConfig  # 确认这些路径正确
+from colbert.modeling.colbert import colbert_score
+from colbert.modeling.tokenization import QueryTokenizer, DocTokenizer
+from colbert.infra import Run, RunConfig, ColBERTConfig  # add ColBERTConfig
 from colbert.indexing.loaders import get_parts, load_doclens
-from colbert.modeling.colbert import ColBERT  # 确认这些路径正确
-# from colbert.search import slow_rerank  # 确认这些路径正确
-
-
+from colbert.searcher import Searcher
+from colbert.data.queries import Queries
 import colbert.modeling.colbert
 from collections import defaultdict
 import numpy as np
@@ -72,10 +74,16 @@ from typing import List
 class re_ranker_mmap:
     def __init__(self, index_path, args, inference, verbose = False, memtype='mmap'):
         self.args = args
-        self.doc_maxlen = args.doc_maxlen
+        # self.doc_maxlen = args.doc_maxlen
+
+        self.doc_maxlen = args.colbert_config.doc_maxlen   #use Checkpoint
+
         assert self.doc_maxlen > 0
         self.inference = inference
-        self.dim = args.dim
+        # self.dim = args.dim
+
+        self.dim = args.colbert_config.dim  #use Checkpoint
+
         self.verbose = verbose
     
         # Every pt file gets its own list of doc lengths
@@ -149,7 +157,8 @@ class re_ranker_mmap:
         colbert = self.args.colbert
         inference = self.inference
 
-        Q = inference.queryFromText([query])
+        # Q = inference.queryFromText([query])
+        Q = inference.queryFromText([query], to_cpu=not self.args.gpu)  # use Checkpoint
         if self.verbose:
             pid_iter = tqdm(pids, desc="lookups", unit="d")
         else:
@@ -218,10 +227,8 @@ class re_ranker_mmap:
         return allscores
 
 class ColBERTModelOnlyFactory():
-
-    def __init__(self, 
-            # colbert_model : Union[str, Tuple[colbert.modeling.colbert.ColBERT, dict]], gpu=True, mask_punctuation=False, dim=128):
-            colbert_model : Union[str, Tuple[ColBERT, dict]], gpu=True, mask_punctuation=False, dim=128):
+    
+    def __init__(self, colbert_model: Union[str, Tuple[ColBERT, dict]], gpu=True, mask_punctuation=False, dim=128):
         args = Object()
         args.query_maxlen = 32
         args.doc_maxlen = 180
@@ -232,62 +239,45 @@ class ColBERTModelOnlyFactory():
         args.nprobe = 10
         args.part_range = None
         args.mask_punctuation = mask_punctuation
-
-        self.gpu = True
+        args.gpu = gpu  # Add gpu properties
+        self.gpu = gpu
         if not gpu:
-            
             warn("Gpu disabled, YMMV")
             import colbert.parameters
-            import colbert.evaluation.load_model
-            import colbert.modeling.colbert
-            colbert.parameters.DEVICE = colbert.evaluation.load_model.DEVICE = colbert.modeling.colbert.DEVICE = torch.device("cpu")
-            self.gpu = False
-        if isinstance (colbert_model, str):
+            colbert.parameters.DEVICE = torch.device("cpu")
+
+        if isinstance(colbert_model, str):
             args.checkpoint = colbert_model
-            args.colbert, args.checkpoint = load_model(args)
+            # colbert_config = ColBERTConfig.from_existing(ColBERTConfig.load_from_checkpoint(colbert_model))
+            colbert_config = ColBERTConfig.load_from_checkpoint(colbert_model)
+            args.colbert = Checkpoint(name=args.checkpoint, colbert_config=colbert_config)
         else:
             assert isinstance(colbert_model, tuple)
             args.colbert, args.checkpoint = colbert_model
-            from colbert.modeling.colbert import ColBERT
             assert isinstance(args.colbert, ColBERT)
             assert isinstance(args.checkpoint, dict)
-            
-        args.inference = Checkpoint(args.colbert, amp=args.amp)
+        
+        args.inference = args.colbert
         self.args = args
 
-        # if isinstance(colbert_model, str):
-        #     self.colbert = ColBERT.from_checkpoint(colbert_model)  # 使用 from_checkpoint 方法
-        # else:
-        #     assert isinstance(colbert_model, tuple)
-        #     self.colbert, self.checkpoint = colbert_model
-        #     assert isinstance(self.colbert, ColBERT)
-        #     assert isinstance(self.checkpoint, dict)
-
-        # self.inference = self.colbert.inference  # 从模型中获取推理对象
-        # self.args = args
-
-                
+        
     def query_encoder(self, detach=True) -> pt.Transformer:
-        """
-        Returns a transformer that can encode queries using ColBERT's model.
-        input: qid, query
-        output: qid, query, query_embs, query_toks,
-        """
         def _encode_query(row):
             with torch.no_grad():
-                Q, ids, masks = self.args.inference.queryFromText([row.query], bsize=512, with_ids=True)
+                Q = self.args.inference.queryFromText([row.query], bsize=512)
                 if detach:
                     Q = Q.cpu()
-                return pd.Series([Q[0], ids[0]])
+                print(f"Encoded query: {Q[0]}")  # Print debugging information
+                return pd.Series([Q[0]])
             
         def row_apply(df):
             if "docno" in df.columns or "docid" in df.columns:
                 warn("You are query encoding an R dataframe, the query will be encoded for each row")
-            df[["query_embs", "query_toks"]] = df.apply(_encode_query, axis=1)
+            df["query_embs"] = df.apply(_encode_query, axis=1)
             return df
         
         return pt.apply.generic(row_apply)
-    
+        
     def text_encoder(self, detach=True, batch_size=8) -> pt.Transformer:
         """
         Returns a transformer that can encode the text using ColBERT's model.
@@ -361,30 +351,37 @@ class ColBERTModelOnlyFactory():
         fig.tight_layout()
         #fig.subplots_adjust(hspace=-0.37)
         return fig
-
+    
     def text_scorer(self, query_encoded=False, doc_attr="text", verbose=False) -> pt.Transformer:
-        """
-        Returns a transformer that uses ColBERT model to score the *text* of documents.
-        """
-        #input: qid, query, docno, text
-        #OR
-        #input: qid, query, query_embs, query_toks, query_weights, docno, text
-
-        #output: qid, query, docno, score
-
-        def slow_rerank_with_qembs(args, qembs, pids, passages, gpu=True):
+        def slow_rerank(args, query, pids, passages):
+            colbert = args.colbert
             inference = args.inference
 
-            # make to 3d tensor
-            Q = torch.unsqueeze(qembs, 0)
-            if gpu:
-                Q = Q.cuda()
-            
-            D_ = inference.docFromText(passages, bsize=args.bsize)
-            if gpu:
-                D_ = D_.cuda()
-            
-            scores = (Q @ D_.permute(0, 2, 1)).max(2).values.sum(1)
+            # print(f"Number of passages: {len(passages)}")
+            # for i, passage in enumerate(passages[:5]): 
+            #     print(f"Passage {i}: {passage[:100]}...") 
+
+            Q = inference.queryFromText([query]).cpu()
+            print(f"Query embedding device: {Q.device}") 
+            print(f"Query shape: {Q.shape}") 
+
+            doc_tokenizer = DocTokenizer(config=colbert.colbert_config)
+            input_ids, attention_mask = doc_tokenizer.tensorize(passages)
+            D_padded, D_mask = inference.doc(input_ids, attention_mask, keep_dims='return_mask')
+
+            # D_padded_tuple = inference.docFromText(passages, bsize=args.bsize, keep_dims="return_mask")
+            # D_padded, D_mask = D_padded_tuple
+
+            # if isinstance(D_mask, list):
+            #     D_mask = torch.tensor(D_mask)
+
+            # D_padded = D_padded
+            # D_mask = D_mask.cpu()
+            print(f"D_padded shape: {D_padded.shape}")
+            print(f"D_mask shape: {D_mask.shape}")
+
+            # v2 colbert_score
+            scores = colbert_score(Q, D_padded, D_mask, config=colbert.colbert_config).cpu()
 
             scores = scores.sort(descending=True)
             ranked = scores.indices.tolist()
@@ -395,31 +392,62 @@ class ColBERTModelOnlyFactory():
 
             return list(zip(ranked_scores, ranked_pids, ranked_passages))
 
+        
+        def slow_rerank_with_qembs(args, qembs, pids, passages, gpu=True):
+            inference = args.inference 
+            print(f"Using inference object: {inference}")
+
+            Q = torch.unsqueeze(qembs, 0)
+            if gpu:
+                Q = Q.cuda()
+            Q = Q.half()  # Converts the query embed to the float16 type
+
+            D_tuple = inference.docFromText(passages, bsize=args.bsize, keep_dims=True, to_cpu=not gpu)
+
+            # Unlock the returned tuple to get the actual document embed
+            D = D_tuple[0] 
+            if gpu:
+                D = D.cuda()
+
+            try:
+                scores = (Q @ D.permute(0, 2, 1)).max(2).values.sum(1)
+                print(f"Scores: {scores}")  # Print debugging information
+            except Exception as e:
+                print(f"Error calculating scores: {e}")
+                return []
+
+            scores = scores.sort(descending=True)
+            ranked = scores.indices.tolist()
+            ranked_scores = scores.values.tolist()
+            ranked_pids = [pids[position] for position in ranked]
+            ranked_passages = [passages[position] for position in ranked]
+            return list(zip(ranked_scores, ranked_pids, ranked_passages))
+
         def _text_scorer(queries_and_docs):
             groupby = queries_and_docs.groupby("qid")
-            rtr=[]
+            rtr = []
             with torch.no_grad():
                 for qid, group in tqdm(groupby, total=len(groupby), unit="q") if verbose else groupby:
                     query = group["query"].values[0]
                     ranking = slow_rerank(self.args, query, group["docno"].values, group[doc_attr].values.tolist())
                     for rank, (score, pid, passage) in enumerate(ranking):
-                            rtr.append([qid, query, pid, score, rank])          
+                        rtr.append([qid, query, pid, score, rank])
             return pd.DataFrame(rtr, columns=["qid", "query", "docno", "score", "rank"])
 
-        # when query is encoded 
         def _text_scorer_qembs(queries_and_docs):
             groupby = queries_and_docs.groupby("qid")
-            rtr=[]
+            rtr = []
             with torch.no_grad():
                 for qid, group in tqdm(groupby, total=len(groupby), unit="q") if verbose else groupby:
                     qembs = group["query_embs"].values[0]
                     query = group["query"].values[0]
                     ranking = slow_rerank_with_qembs(self.args, qembs, group["docno"].values, group[doc_attr].values.tolist(), gpu=self.gpu)
                     for rank, (score, pid, passage) in enumerate(ranking):
-                            rtr.append([qid, query, pid, score, rank])          
+                        rtr.append([qid, query, pid, score, rank])
             return pd.DataFrame(rtr, columns=["qid", "query", "docno", "score", "rank"])
 
         return pt.apply.generic(_text_scorer_qembs if query_encoded else _text_scorer)
+
 
     def scorer(factory, add_contributions=False, add_exact_match_contribution=False, verbose=False, gpu=True) -> pt.Transformer:
         """
@@ -507,518 +535,84 @@ class ColBERTModelOnlyFactory():
             return df
             
         return pt.apply.by_query(_score_query, add_ranks=True)
-
-class ColBERTFactory(ColBERTModelOnlyFactory):
-
-    def __init__(self, 
-            # colbert_model : Union[str, Tuple[colbert.modeling.colbert.ColBERT, dict]], 
-            colbert_model : Union[str, Tuple[ColBERT, dict]], 
-            index_root : str, 
-            index_name : str,
-            faiss_partitions=None,#TODO 100-
-            memtype = "mem",
-            faisstype= "mem",
-            **kwargs):
-        
-        super().__init__(colbert_model, **kwargs)
-       
-        self.verbose = False
-        self._faissnn = None
-        self.index_root = index_root
-        self.index_name = index_name
-        self.numdocs = -1
-        if index_root is None or index_name is None:
-            warn("No index_root and index_name specified - no index ranking possible")
-        else:
-            self.index_path = os.path.join(index_root, index_name)
-            docnos_file = os.path.join(self.index_path, "docnos.pkl.gz")
-            if os.path.exists(docnos_file):
-                with pt.io.autoopen(docnos_file, "rb") as f:
-                    self.docid2docno = pickle.load(f)
-                    # support reverse docno lookup in memory
-                    self.docno2docid = { docno : docid for docid, docno in enumerate(self.docid2docno) }
-                    self.docid_as_docno = False
-                self.numdocs = len(self.docid2docno)
-            else:
-                self.docid_as_docno = True
-        
-        self.faiss_index_on_gpu = True
-        if not self.gpu:
-            self.faiss_index_on_gpu = False
-
-        try:
-            import faiss
-        except:
-            warn("Faiss not installed. You cannot do retrieval")
-        
-        self.args.partitions = faiss_partitions
-        self.faisstype = faisstype
-        self.memtype = memtype
-
-        #we load this lazily
-        self.rrm = None
-        self.faiss_index = None
-        
-    # allows a colbert index to be built from a dataset
-    def from_dataset(dataset : Union[str,Dataset], 
-            variant : str = None, 
-            version='latest',            
-            **kwargs):
-        
-        from pyterrier.batchretrieve import _from_dataset
-        
-        #colbertfactory doesnt match quite the expectations, so we can use a wrapper fb
-        def _ColBERTFactoryconstruct(folder, **kwargs):
-            import os
-            index_loc = os.path.dirname(folder)
-            index_name = os.path.basename(folder)
-            checkpoint = kwargs.get('colbert_model')
-            del(kwargs['colbert_model'])
-            return ColBERTFactory(checkpoint, index_loc, index_name, **kwargs)
-        
-        return _from_dataset(dataset, 
-                             variant=variant, 
-                             version=version, 
-                             clz=_ColBERTFactoryconstruct, **kwargs)
-        
-    def _rrm(self) -> re_ranker_mmap:
-        """
-        Returns an instance of the re_ranker_mmap class.
-        Only one is created, if necessary.
-        """
-
-        if self.rrm is not None:
-            return self.rrm
-        print("Loading reranking index, memtype=%s" % self.memtype)
-        self.rrm = re_ranker_mmap(
-            self.index_path, 
-            self.args, 
-            self.args.inference, 
-            verbose=self.verbose, 
-            memtype=self.memtype)
-        return self.rrm
-
-    def load_index(self, embeddings=True, faiss=False):
-        """
-        Forces the embeddigs and faiss indices to be loaded (into memory).
-        If memtype or faisstype are set to mmap, then the mmapping is performed instead.
-        """
-        if embeddings:
-            self._rrm()
-        if faiss:
-            self._faiss_index()
-
-    def __len__(self):
-        if self.numdocs > -1:
-            return self.numdocs
-        return self._rrm().num_docs()
-        
-    def nn_term(self, cf=True, df=False):
-        """
-        Returns an instance of the FaissNNTerm class, which provides statistics about terms
-        """
-        if self._faissnn is not None:
-            return self._faissnn
-        from .faiss_term_index import FaissNNTerm
-        #TODO accept self.args.inference as well
-        self._faissnn = FaissNNTerm(
-            self.args.colbert,
-            self.index_root,
-            self.index_name,
-            faiss_index = self._faiss_index(), 
-            cf=cf, df=df, mask_punctuation=self.args.mask_punctuation)
-        return self._faissnn
-
-    def _faiss_index(self):
-        """
-        Returns an instance of the Colbert FaissIndex class, which provides nearest neighbour information
-        """
-        from colbert.indexing.faiss import get_faiss_index_name
-        from colbert.ranking.faiss_index import FaissIndex
-        if self.faiss_index is not None:
-            return self.faiss_index
-        faiss_index_path = get_faiss_index_name(self.args)
-        faiss_index_path = os.path.join(self.index_path, faiss_index_path)
-        if not os.path.exists(faiss_index_path):
-            raise ValueError("No faiss index found at %s" % faiss_index_path)
-        self.faiss_index = FaissIndex(self.index_path, faiss_index_path, self.args.nprobe, self.args.part_range, mmap=self.faisstype == 'mmap')
-        # ensure the faiss_index is transferred to GPU memory for speed
-        import faiss
-        if self.faiss_index_on_gpu:
-            self.faiss_index.faiss_index = faiss.index_cpu_to_all_gpus(self.faiss_index.faiss_index)
-        return self.faiss_index
-
-    def set_retrieve(self, batch=False, query_encoded=False, faiss_depth=1000, verbose=False, docnos=False) -> pt.Transformer:
-        """
-        Performs ANN retrieval, but the retrieval forms a set - i.e. there is no score attribute. Number of documents retrieved
-        is indirectly controlled by the faiss_depth parameters (denoted as k' in the original ColBERT paper).
-        """
-        #input: qid, query
-        #OR
-        #input: qid, query, query_embs, query_toks, query_weights
-
-        #output: qid, query, docid, [docno]
-        #OR
-        #output: qid, query, query_embs, query_toks, query_weights, docid, [docno]
-        
-        assert not batch
-        faiss_index = self._faiss_index()
-        
-        # this is when queries have NOT already been encoded
-        def _single_retrieve(queries_df):
-            # we know that query_encoded=False
-            if "query_embs" in queries_df.columns:
-                warn("set_retrieve() used with query_encoded=False, but query_embs column present in input. Should you use query_encoded=True?")
-            rtr = []
-            iter = queries_df.itertuples()
-            iter = tqdm(iter, unit="q")  if verbose else iter
-            for row in iter:
-                qid = row.qid
-                query = row.query
-                with torch.no_grad():
-                    Q, ids, masks = self.args.inference.queryFromText([query], bsize=512, with_ids=True)
-                Q_f = Q[0:1, :, :]
-                all_pids = faiss_index.retrieve(faiss_depth, Q_f, verbose=verbose)
-                Q_cpu = Q[0, :, :].cpu()
-                for passage_ids in all_pids:
-                    if verbose:
-                        print("qid %s retrieved docs %d" % (qid, len(passage_ids)))
-                    for pid in passage_ids:
-                        rtr.append([qid, query, pid, ids[0], Q_cpu])
-                        
-            #build the DF to return for this query
-            rtrDf = pd.DataFrame(rtr, columns=["qid","query",'docid','query_toks','query_embs'] )
-            if docnos:
-                rtrDf = self._add_docnos(rtrDf)
-            return rtrDf
-
-        # this is when queries have already been encoded
-        def _single_retrieve_qembs(queries_df):
-
-            rtr = []
-            query_weights = "query_weights" in queries_df.columns
-            iter = queries_df.itertuples()
-            iter = tqdm(iter, unit="q") if verbose else iter
-            for row in iter:
-                qid = row.qid
-                embs = row.query_embs
-                Q_f = torch.unsqueeze(embs, 0)
-                all_pids = faiss_index.retrieve(faiss_depth, Q_f, verbose=verbose)
-                for passage_ids in all_pids:
-                    if verbose:
-                        print("qid %s retrieved docs %d" % (qid, len(passage_ids)))
-                    for pid in passage_ids:
-                        if query_weights:
-                           rtr.append([qid, row.query, pid, row.query_toks, row.query_embs, row.query_weights])
-                        else:
-                           rtr.append([qid, row.query, pid, row.query_toks, row.query_embs])
-            
-            #build the DF to return for this query
-            cols = ["qid","query",'docid','query_toks','query_embs']
-            if query_weights:
-                cols.append("query_weights")
-            rtrDf = pd.DataFrame(rtr, columns=cols)
-            if docnos:
-                rtrDf = self._add_docnos(rtrDf)
-            return rtrDf
-        
-        return pt.apply.generic(_single_retrieve_qembs if query_encoded else _single_retrieve)
-
-    def _add_docids(self, df):
-        if self.docid_as_docno:
-            df["docid"] = df["docno"].astype('int64')
-        else:
-            df["docid"] = df["docno"].apply(lambda docno : self.docno2docid[docno])
-        return df
-
-    def _add_docnos(self, df):
-        if self.docid_as_docno:
-            df["docno"] = df["docid"].astype('str')
-        else:
-            df["docno"] = df["docid"].apply(lambda docid : self.docid2docno[docid])
-        return df
-
-    def index_scorer(self, query_encoded=False, add_ranks=False, add_docnos=True, batch_size=10000) -> pt.Transformer:
-        """
-        Returns a transformer that uses the ColBERT index to perform scoring of documents to queries 
-        """
-        #input: qid, query, [docno], [docid] 
-        #OR
-        #input: qid, query, query_embs, query_toks, query_weights, docno], [docid] 
-
-        #output: qid, query, docno, score
-
-        rrm = self._rrm()
-
-        def rrm_scorer(qid_group):
-            if "query_embs" in qid_group.columns:
-                warn("index_scorer() used with query_encoded=False, but query_embs column present in input. Should you use query_encoded=True?")
-            qid_group = qid_group.copy()
-            if "docid" not in qid_group.columns:
-                qid_group = self._add_docids(qid_group)
-            qid_group.sort_values("docid", inplace=True)
-            docids = qid_group["docid"].values
-            if batch_size > 0:
-                scores = rrm.our_rerank_batched(qid_group.iloc[0]["query"], docids, batch_size=batch_size, gpu=self.gpu)
-            else:
-                scores = rrm.our_rerank(qid_group.iloc[0]["query"], docids, gpu=self.gpu)
-            qid_group["score"] = scores
-            if "docno" not in qid_group.columns and add_docnos:
-                qid_group = self._add_docnos(qid_group)
-            if add_ranks:
-                return pt.model.add_ranks(qid_group)
-            return qid_group
-
-        def rrm_scorer_query_embs(qid_group):
-            qid_group = qid_group.copy()
-            if "docid" not in qid_group.columns:
-                qid_group = self._add_docids(qid_group)
-            qid_group.sort_values("docid", inplace=True)
-            docids = qid_group["docid"].values
-            weights = None
-            if "query_weights" in qid_group.columns:
-                weights = qid_group.iloc[0].query_weights
-            if batch_size > 0:
-                scores = rrm.our_rerank_with_embeddings_batched(qid_group.iloc[0]["query_embs"], docids, weights, batch_size=batch_size, gpu=self.gpu)
-            else:
-                scores = rrm.our_rerank_with_embeddings(qid_group.iloc[0]["query_embs"], docids, weights, gpu=self.gpu)
-            qid_group["score"] = scores
-            if "docno" not in qid_group.columns and add_docnos:
-                qid_group = self._add_docnos(qid_group)
-            if add_ranks:
-                return pt.model.add_ranks(qid_group)
-            return qid_group
-
-        if query_encoded:
-            return pt.apply.by_query(rrm_scorer_query_embs) 
-        return pt.apply.by_query(rrm_scorer) 
-
-    def get_embeddings_by_token(self, tokenid, flatten=True, sample=None) -> Union[torch.TensorType, List[torch.TensorType]]:
-        """
-        Returns all embeddings for a given tokenid. Specifying a sample fraction results in the embeddings being sampled.
-        """
-        import torch
-        from typing import List
-
-        def partition(tensor : torch.Tensor, offsets : torch.Tensor) -> List[torch.Tensor]:
-            num_shards = offsets.shape[0]
-            positions = torch.bucketize(tensor, offsets[1:])
-            rtr = [tensor[positions == shard_id] for shard_id in range(num_shards)]
-            return rtr
-        
-        nn_term = self.nn_term()
-        rrm = self._rrm()
-        
-        # global positions of this tokenid in the entire index
-        offsets = (nn_term.emb2tid == tokenid).nonzero()
-        
-        # apply sampling if requested
-        if sample is not None:
-            offsets = offsets[self.rng.integers(0, len(offsets), int(sample * len(offsets)))]
-        
-        # get offsets partitioned by index shard
-        partitioned_offsets = partition(offsets, self.segment_starts)            
-        
-        # get the requested embeddings
-        all_tensors = [ rrm.part_mmap[shard].mmap[shard_portion - self.segment_starts[shard]] for shard, shard_portion in enumerate(partitioned_offsets) if shard_portion.shape[0] > 0 ]
-
-        # if requested, make a single tensor - involves a further copy
-        if flatten:
-            all_tensors = torch.cat(all_tensors).squeeze()
-        return all_tensors
-
-    def end_to_end(self) -> pt.Transformer:
-        """
-        Returns a transformer composition that uses a ColBERT FAISS index to retrieve documents, followed by a ColBERT index 
-        to perform accurate scoring of the retrieved documents. Equivalent to `colbertfactory.set_retrieve() >> colbertfactory.index_scorer()`.
-        """
-        #input: qid, query, 
-        #output: qid, query, docno, score
-        return self.set_retrieve() >> self.index_scorer(query_encoded=True)
-
-    def ann_retrieve_score(self, batch=False, query_encoded=False, faiss_depth=1000, verbose=False, maxsim=True, add_ranks=True, add_docnos=True, num_qembs_hint=32) -> pt.Transformer:
-        """
-        Like set_retrieve(), uses the ColBERT FAISS index to retrieve documents, but scores them using the maxsim on the approximate
-        (quantised) nearest neighbour scores. 
-
-        This method was first proposed in our CIKM 2021 paper.
-
-        Parameters:
-        - batch(bool): whether to process all queries at once. True not currently supported.
-        - query_encoded(bool): whether to apply the ColBERT model to encode the queries. Defaults to false.
-        - faiss_depth(int): How many passage embeddings to retrieve for each query embedding, denoted as k' in the ColBERT paper. Defaults to 1000, as per the ColBERT paper.
-        - verbose(bool): Display tqdm progress bar during retrieval
-        - maxsim(bool): Whether to use approx maxsim (True) or approx sumsim (False). See our CIKM 2021 paper for more details. Default is True.
-        - add_ranks(bool): Whether to use add the rank column, to allow rank cutoffs to be applied. Default is True. Response time will be enhanced if False.
-        - add_docnos(bool):  Whether to use add the docno column. Default is True. Response time will be enhanced if False.
-
-        Reference:
-        
-        C. Macdonald, N. Tonellotto. On Approximate Nearest Neighbour Selection for Multi-Stage Dense Retrieval
-        In Proceedings of ICTIR CIKM.
-        """
-        #input: qid, query
-        #OR
-        #input: qid, query, query_embs, query_toks, query_weights
-
-        #output: qid, query, docid, [docno], score, [rank]
-        #OR
-        #output: qid, query, query_embs, query_toks, query_weights, docid, [docno], score, [rank]
-        assert not batch, "batching not supported yet"
-        assert hasattr(self._faiss_index(), 'faiss_index'), "multi index support removed"
-          # all_scores, all_embedding_ids = self._faiss_index().search(Q_cpu_numpy, faiss_depth, verbose=verbose)
-          # pids = np.searchsorted(self.faiss_index.doc_offsets, embedding_ids, side='right') - 1
-        assert maxsim, "only maxsim supported now."
-
-        # this is a big malloc, sized for the number of docs in the collection
-        # for this reason, we reuse it across queries. All used values are reset
-        # to zero afer use.
-        import numpy as np
-        score_buffer = np.zeros( (len(self), num_qembs_hint ) )
-
-        def _single_retrieve(queries_df):
-            rtr = []
-            weights_set = "query_weights" in queries_df.columns
-            iter = queries_df.itertuples()
-            iter = tqdm(iter, unit="q") if verbose else iter
-            for row in iter:
-                qid = row.qid
-                if query_encoded:
-                    embs = row.query_embs
-                    qtoks = row.query_toks
-                    ids = np.expand_dims(qtoks, axis=0)
-                    Q_cpu = embs.cpu()
-                    Q_cpu_numpy = embs.float().numpy()
-                    #NB: ids is 2D
-                    qweights = row.query_weights.unsqueeze(0) if weights_set else torch.ones(ids.shape)
-                else:
-                    if "query_embs" in queries_df.columns:
-                        warn("ann_retrieve_score() used with query_encoded=False, but query_embs column present in input. Should you use query_encoded=True?")
-                    with torch.no_grad():
-                        Q, ids, masks = self.args.inference.queryFromText([row.query], bsize=512, with_ids=True)
-                    Q_f = Q[0:1, :, : ]
-                    Q_cpu = Q[0, :, :].cpu()
-                    Q_cpu_numpy = Q_cpu.float().numpy()
-                    #NB: ids is 2D
-                    qweights = torch.ones(ids.shape)
-                
-                all_scores, all_embedding_ids = self._faiss_index().faiss_index.search(Q_cpu_numpy, faiss_depth)
-                nonlocal score_buffer
-                # we reuse this buffer, but it has to be big enough for expanded queries
-                if score_buffer.shape[1] < Q_cpu_numpy.shape[0]:
-                  score_buffer = np.zeros( (len(self), Q_cpu_numpy.shape[0] ) )
-                
-                pids, final_scores = _approx_maxsim_numpy(all_scores, all_embedding_ids, self.faiss_index.emb2pid.numpy(), qweights[0].numpy(), score_buffer)
-
-                for offset in range(pids.shape[0]):
-                    rtr.append([qid, row.query, pids[offset], final_scores[offset], ids[0], Q_cpu, qweights[0]])
-                    
-
-            rtr = pd.DataFrame(rtr, columns=["qid","query",'docid', 'score','query_toks','query_embs', 'query_weights'])
-            if add_docnos:
-                rtr = self._add_docnos(rtr)
-            if add_ranks:
-                rtr = pt.model.add_ranks(rtr)
-            return rtr
-        t = pt.apply.by_query(_single_retrieve, add_ranks=False, verbose=verbose)
-        import types
-        def __reduce_ex__(t2, proto):
-            kwargs = { 'batch':batch, 'query_encoded': query_encoded, 'faiss_depth' : faiss_depth, 'maxsim': maxsim}
-            return (
-                ann_retrieve_score,
-                #self is the factory, and it will be serialised using its own __reduce_ex__ method
-                (self, [], kwargs),
-                None
-            )
-        t.__reduce_ex__ = types.MethodType(__reduce_ex__, t)
-        t.__getstate__ = types.MethodType(lambda t2 : None, t)
-        return t
-
-    def fetch_index_encodings(factory, verbose=False, ids=False) -> pt.Transformer:
-        """
-        New encoder that gets embeddings from rrm and stores into doc_embs column.
-        If ids is True, then an additional doc_toks column is also added. This requires 
-        a Faiss NN term index data structure, i.e. indexing should have ids=True set.
-        input: docid, ...
-        output: ditto + doc_embs [+ doc_toks]
-        """
-        def _get_embs(df):
-            rrm = factory._rrm() # _rrm() instead of rrm because we need to check it has already been loaded.
-            if verbose:
-                import pyterrier as pt
-                pt.tqdm.pandas(desc="fetch_index_encodings")
-                df["doc_embs"] = df.docid.progress_apply(rrm.get_embedding) 
-            else:
-                df["doc_embs"] = df.docid.apply(rrm.get_embedding)
-            return df
-
-        def _get_tok_ids(df):
-            fnt = factory.nn_term(False)
-            def _get_toks(pid):
-                end = fnt.end_offsets[pid]
-                start = end - fnt.doclens[pid]
-                return fnt.emb2tid[start:end].clone()
-
-            if verbose:
-                import pyterrier as pt
-                pt.tqdm.pandas()
-                df["doc_toks"] = df.docid.progress_apply(_get_toks)
-            else:
-                df["doc_toks"] = df.docid.apply(_get_toks)
-            return df
-        rtr = pt.apply.by_query(_get_embs, add_ranks=False)
-        if ids:
-            rtr = rtr >> pt.apply.by_query(_get_tok_ids, add_ranks=False)
-        return rtr
-
-    def prf(pytcolbert, rerank, fb_docs=3, fb_embs=10, beta=1.0, k=24) -> pt.Transformer:
-        """
-        Returns a pipeline for ColBERT PRF, either as a ranker, or a re-ranker. Final ranking is cutoff at 1000 docs.
     
-        Parameters:
-         - rerank(bool): Whether to rerank the initial documents, or to perform a new set retrieve to gather new documents.
-         - fb_docs(int): Number of passages to use as feedback. Defaults to 3. 
-         - k(int): Number of clusters to apply on the embeddings of the top K documents. Defaults to 24.
-         - fb_embs(int): Number of expansion embeddings to add to the query. Defaults to 10.
-         - beta(float): Weight of the new embeddings compared to the original emebddings. Defaults to 1.0.
 
-        Reference:
-        
-        X. Wang, C. Macdonald, N. Tonellotto, I. Ounis. Pseudo-Relevance Feedback for Multiple Representation Dense Retrieval. 
-        In Proceedings of ICTIR 2021.
-        
-        """
-        #input: qid, query, 
-        #output: qid, query, query_embs, query_toks, query_weights, docno, rank, score
-        dense_e2e = pytcolbert.set_retrieve() >> pytcolbert.index_scorer(query_encoded=True, add_ranks=True, batch_size=10000)
-        if rerank:
-            prf_pipe = (
-                dense_e2e  
-                >> ColbertPRF(pytcolbert, k=k, fb_docs=fb_docs, fb_embs=fb_embs, beta=beta, return_docs=True)
-                >> (pytcolbert.index_scorer(query_encoded=True, add_ranks=True, batch_size=5000) %1000)
-            )
-        else:
-            prf_pipe = (
-                dense_e2e  
-                >> ColbertPRF(pytcolbert, k=k, fb_docs=fb_docs, fb_embs=fb_embs, beta=beta, return_docs=False)
-                >> pytcolbert.set_retrieve(query_encoded=True)
-                >> (pytcolbert.index_scorer(query_encoded=True, add_ranks=True, batch_size=5000) % 1000)
-            )
-        return prf_pipe
+class ColBERTv2Index(ColBERTModelOnlyFactory):
 
-    def explain_doc(self, query : str, doc : Union[str,int]):
-        """
-        Provides a diagram explaining the interaction between a query and a given docno
-        """
-        if isinstance(doc,str):
-            pid = self.docno2docid[doc]
-        elif isinstance(doc,int):
-            pid = doc
+    def __init__(self, colbert, index_location, **kwargs):
+        super().__init__(colbert, **kwargs)
+        # # Load the configuration from the JSON file
+        # config_file = os.path.join(index_location, "colbert_config.json")
+        # with open(config_file, 'r') as f:
+        #     config_data = json.load(f)
+        #     self.index_name = config_data["index_name"]
+        #     self.nbits = config_data["nbits"]
+
+        # index_subfolder = f"{self.index_name}_nbits={self.nbits}"
+        # full_index_path = os.path.join(index_location, "indexes", index_subfolder)
+        # LOAD index from index_location - colbert.Searcher
+        self.searcher = Searcher(index_location)
+        self.docno_mapping = {}
+
+        # Load the docno mappings from the permanent file
+        docno_file = os.path.join(index_location, "docnos.tsv")
+
+        # with open('bla.tsv', 'r') as f:
+        #     for line in f:
+        #         parts = line.strip().split('\t')
+        #         if len(parts) >= 2:
+        #             line_idx = int(parts[0])
+        #             docno = parts[1]
+        #             self.docno_mapping[line_idx] = docno
+        with open(docno_file, 'r') as f:
+            for line in f:
+                parts = line.strip().split('\t')
+                if len(parts) >= 2:
+                    line_idx = int(parts[0])
+                    docno = parts[1]
+                    self.docno_mapping[line_idx] = docno
+        
+        #delete the temporary text file
+        temp_text_file = "temp_texts.tsv"
+        if os.path.exists(temp_text_file):
+            os.remove(temp_text_file)
+            print(f"Temporary text file {temp_text_file} deleted successfully.")
         else:
-            raise ValueError("Expected docno(str) or docid(int)")
-        embsD = self._rrm().get_embedding(pid)
-        idsD = self.nn_term().get_tokens_for_doc(pid)
-        return self._explain(query, embsD, idsD)
+            print(f"Temporary text file {temp_text_file} not found or already deleted.")
+
+    def end_to_end(self, k=100) -> pt.Transformer:
+        def _search(df_query):
+            # TODO make df_queries into a colbert.Queries object
+            assert len(df_query) == 1
+            #queries_dict = {df_query.iloc[0]["qid"] : df_query.iloc[0]["query"]}
+            #queries = Queries(data=queries_dict)
+            # convert Queries to str list
+            #query_texts = [queries[qid] for qid in queries.keys()]
+            #print("[DEBUG] Query Texts:", query_texts) 
+
+            # encode Q
+            Q = self.searcher.encode([df_query.iloc[0]["query"]])
+            print("[DEBUG] Encoded Q shape:", Q.shape) 
+            print("[DEBUG] Encoded Q:", Q) 
+
+            
+            # call colbert.Searcher
+            doc_ids, ranks, scores = self.searcher.dense_search(Q, k=k)
+            print("[DEBUG] Document IDs:", doc_ids) 
+            print("[DEBUG] Scores:", scores) 
+            
+            # convert ranking into df_results dataframe
+            df_results  = []
+            for idx, docid in enumerate(doc_ids):
+                # print(type(docid))
+                # df_results.append([df_query.iloc[0]["qid"], docid, scores[idx], ranks[idx]])
+                docno = self.docno_mapping.get(docid, "unknown_docno")
+                df_results.append([df_query.iloc[0]["qid"], docno, scores[idx], ranks[idx]])
+
+            df_results = pd.DataFrame(df_results, columns=["qid", "docno", "score", "rank"])
+            print("[DEBUG] Result DataFrame:", df_results)
+            return df_results
+        return pt.apply.by_query(_search)
     
 
 import pandas as pd
