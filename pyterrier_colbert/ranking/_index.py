@@ -35,7 +35,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
             if len(df_query) == 0:
                 return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
             
-            # TODO can we make df_queries into a colbert.Queries object
+            # TODO can we make df_queries into a colbert.Queries object to allow parallelisation?
             assert len(df_query) == 1
             # encode Q
             Q = self.searcher.encode([df_query.iloc[0]["query"]])
