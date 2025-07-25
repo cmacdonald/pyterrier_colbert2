@@ -16,9 +16,16 @@ from warnings import warn
 
 class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
+    ARTIFACT_TYPE = 'dense_index'
+    ARTIFACT_FORMAT = 'colbert'
+    ARTIFACT_PACKAGE_HINT = 'pyterrier_colbert2'
+
     def __init__(self, colbert, index_location, **kwargs):
         # TODO do we need the colbert checkpoint....; Searcher will load it too.
-        super().__init__(colbert, **kwargs)
+
+        # call both super-class constructors
+        super(ColBERTModelOnlyFactory, self).__init__(colbert, **kwargs)
+        super(pt.Artifact, self).__init__(index_location)
         import os
         dirs = os.path.split(index_location)
         self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
