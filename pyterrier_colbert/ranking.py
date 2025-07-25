@@ -367,10 +367,11 @@ class ColBERTv2Index(ColBERTModelOnlyFactory):
             # call colbert.Searcher
             docids, ranks, scores = self.searcher.dense_search(Q, k=k)
             docnos = self.docnos.fwd[docids]
+            assert len(docnos) == len(scores)
             return pd.DataFrame({
-                "qid": df_query.iloc[0]["qid"],
+                "qid": [df_query.iloc[0]["qid"]] * len(docnos),
                 "docno": docnos,
                 "score": scores,
                 "rank": ranks
             })
-        return pt.apply.by_query(_search)
+        return pt.apply.by_query(_search, add_ranks=False)
