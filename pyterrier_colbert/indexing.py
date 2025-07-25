@@ -83,16 +83,15 @@ class ColbertV2Indexer(pt.Indexer):
                 )
             print(config)
             indexer = Indexer(checkpoint=self.checkpoint, config=config)
-            # colbert needs to know length, so assumes the index is a list of strings, not an iterable
-            indexer.index(name=f"{self.index_name}_nbits={self.nbits}", collection=list(_gen()), overwrite=True)
+            # colbert needs to know the total number of passages (i.e. length of the iterator), 
+            # so assumes the index is a list of strings, not an iterable
+            indexer.index(name=self.index_name, collection=list(_gen()), overwrite=True)
 
         endtime = timer()
         print("#> V2 Indexing complete, Time elapsed %0.2f seconds" % (endtime - starttime))
 
-        index_subfolder = f"{self.index_name}_nbits={self.nbits}"
-        full_index_path = os.path.join(self.index_location, self.index_name, "indexes", index_subfolder)
-        os.makedirs(full_index_path, exist_ok=True)
-        docnos_file = os.path.join(self.index_location, "docnos.npids")
+        full_index_path = os.path.join(self.index_location, self.index_name, "indexes", self.index_name)
+        docnos_file = os.path.join(full_index_path, "docnos.npids")
 
         print("#> V2 recording docnos")
         from npids import Lookup
@@ -100,4 +99,6 @@ class ColbertV2Indexer(pt.Indexer):
         
 
         print("#> done")
-        
+        from .ranking import ColBERTv2Index
+        ranker = ColBERTv2Index(self.checkpoint, full_index_path)
+        return ranker
