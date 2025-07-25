@@ -76,7 +76,7 @@ class ColbertV2Indexer(pt.Indexer):
                 docnos.append(record['docno'])
                 yield f"{i}\t{record['text']}" 
 
-        with Run().context(RunConfig(nranks=1, experiment=self.index_name, root=self.index_location)):
+        with Run().context(RunConfig(nranks=1, avoid_fork_if_possible = True, experiment=self.index_name, root=self.index_location)):
             config = ColBERTConfig(
                 nbits=self.nbits,
                 #avoid_fork_if_possible=True,  # prevent transformers error (no impact)
