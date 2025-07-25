@@ -2,7 +2,9 @@ import unittest
 import pandas as pd
 import tempfile
 
-CHECKPOINT="http://www.dcs.gla.ac.uk/~craigm/colbert.dnn.zip"
+
+#CHECKPOINT="http://www.dcs.gla.ac.uk/~craigm/colbert.dnn.zip"
+CHECKPOINT="colbert-ir/colbertv2.0"
 class TestIndexing(unittest.TestCase):
 
     def _indexing_1doc(self, indexmgr, model):
