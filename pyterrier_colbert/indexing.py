@@ -41,7 +41,6 @@ DEBUG=False
 class Object(object):
   pass
 
-
 class ColbertV2Indexer(pt.Indexer):
 
     def __init__(self, index_location, checkpoint, index_name, nbits=2):
@@ -51,16 +50,18 @@ class ColbertV2Indexer(pt.Indexer):
         self.nbits = nbits
 
     def index(self, iter_dict):
-        temp_text_file = "temp_texts.tsv"
-        temp_docno_file = "temp_docnos.tsv"
+        
 
-        # Write docnos to a permanent file and texts to a temporary file
-        with open(temp_text_file, 'w') as text_fout, open(temp_docno_file, 'w') as docno_fout:
-            for line_idx, line in enumerate(iter_dict):
-                docno = line["docno"]
-                cleaned_text = line['text'].replace('\n', ' ').replace('\r', ' ')
-                text_fout.write(f"{line_idx}\t{cleaned_text}\n")
-                docno_fout.write(f"{line_idx}\t{docno}\n")
+        # temp_text_file = "temp_texts.tsv"
+        # temp_docno_file = "temp_docnos.tsv"
+
+        # # Write docnos to a permanent file and texts to a temporary file
+        # with open(temp_text_file, 'w') as text_fout, open(temp_docno_file, 'w') as docno_fout:
+        #     for line_idx, line in enumerate(iter_dict):
+        #         docno = line["docno"]
+        #         cleaned_text = line['text'].replace('\n', ' ').replace('\r', ' ')
+        #         text_fout.write(f"{line_idx}\t{cleaned_text}\n")
+        #         docno_fout.write(f"{line_idx}\t{docno}\n")
 
         if not os.path.exists(self.index_location):
             os.makedirs(self.index_location)
@@ -68,12 +69,21 @@ class ColbertV2Indexer(pt.Indexer):
         from timeit import default_timer as timer
         starttime = timer()
 
+        docnos = []
+        def _gen():
+            for i, record in enumerate(iter_dict):
+                docnos.append(record['docno'])
+                yield f"{i}\t{record['text']}" 
+
         with Run().context(RunConfig(nranks=1, experiment=self.index_name, root=self.index_location)):
             config = ColBERTConfig(
-                nbits=self.nbits
+                nbits=self.nbits,
+                #avoid_fork_if_possible=True,  # prevent transformers error (no impact)
                 )
+            print(config)
             indexer = Indexer(checkpoint=self.checkpoint, config=config)
-            indexer.index(name=f"{self.index_name}_nbits={self.nbits}", collection=temp_text_file, overwrite=True)
+            # colbert needs to know length, so assumes the index is a list of strings, not an iterable
+            indexer.index(name=f"{self.index_name}_nbits={self.nbits}", collection=list(_gen()), overwrite=True)
 
         endtime = timer()
         print("#> V2 Indexing complete, Time elapsed %0.2f seconds" % (endtime - starttime))
@@ -82,5 +92,11 @@ class ColbertV2Indexer(pt.Indexer):
         full_index_path = os.path.join(self.index_location, self.index_name, "indexes", index_subfolder)
         os.makedirs(full_index_path, exist_ok=True)
 
-        final_docno_file = os.path.join(full_index_path, "docnos.tsv")
-        os.rename(temp_docno_file, final_docno_file)
+        print("#> V2 recording docnos")
+        from npids import Lookup
+        Lookup.build(docnos, 'path/to/lookup.npids')
+        
+
+        #final_docno_file = os.path.join(full_index_path, "docnos.tsv")
+        #os.rename(temp_docno_file, final_docno_file)
+

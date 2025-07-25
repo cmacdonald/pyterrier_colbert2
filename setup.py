@@ -1,6 +1,6 @@
 import setuptools
 
-requirements = []
+requirements = ['colbert-ai', 'npids']
 with open('requirements.txt', 'rt') as f:
     for req in f.read().splitlines():
         if req.startswith('git+'):
