@@ -28,18 +28,6 @@ class ColbertV2Indexer(pt.Indexer):
         self.nbits = nbits
 
     def index(self, iter_dict):
-        
-
-        # temp_text_file = "temp_texts.tsv"
-        # temp_docno_file = "temp_docnos.tsv"
-
-        # # Write docnos to a permanent file and texts to a temporary file
-        # with open(temp_text_file, 'w') as text_fout, open(temp_docno_file, 'w') as docno_fout:
-        #     for line_idx, line in enumerate(iter_dict):
-        #         docno = line["docno"]
-        #         cleaned_text = line['text'].replace('\n', ' ').replace('\r', ' ')
-        #         text_fout.write(f"{line_idx}\t{cleaned_text}\n")
-        #         docno_fout.write(f"{line_idx}\t{docno}\n")
 
         if not os.path.exists(self.index_location):
             os.makedirs(self.index_location)
