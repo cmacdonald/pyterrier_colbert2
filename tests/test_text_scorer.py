@@ -1,7 +1,6 @@
 import unittest
 import tempfile
-from unittest.result import failfast
-import pyterrier as pt
+import pyterrier as pt, pandas as pd
 
 class TestTextScoring(unittest.TestCase):
 
@@ -68,8 +67,8 @@ class TestTextScoring(unittest.TestCase):
 
     def test_text_scorer_with_qembs(self):
         scorer = self.factory.text_scorer()
-        qe_scorer = pt.transformer.SourceTransformer(self.df) >> self.factory.query_encoder() >> self.factory.text_scorer(query_encoded=True)  
+        qe_scorer = pt.Transformer.from_df(self.df) >> self.factory.query_encoder() >> self.factory.text_scorer(query_encoded=True)  
         rtr = scorer.transform(self.df)  
         qe_rtr = qe_scorer.search(self.df["query"])
         self.assertTrue("score" in rtr.columns)
-        self.assertTrue(rtr.equals(qe_rtr))
+        pd.testing.assert_frame_equal(rtr, qe_rtr)
