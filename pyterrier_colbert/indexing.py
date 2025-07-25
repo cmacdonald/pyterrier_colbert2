@@ -1,6 +1,7 @@
 import pyterrier as pt
 import os
 import json
+import torch
 import numpy as np
 from colbert.indexing.loaders import load_doclens
 import ujson
@@ -91,12 +92,12 @@ class ColbertV2Indexer(pt.Indexer):
         index_subfolder = f"{self.index_name}_nbits={self.nbits}"
         full_index_path = os.path.join(self.index_location, self.index_name, "indexes", index_subfolder)
         os.makedirs(full_index_path, exist_ok=True)
+        docnos_file = os.path.join(self.index_location, "docnos.npids")
 
         print("#> V2 recording docnos")
         from npids import Lookup
-        Lookup.build(docnos, 'path/to/lookup.npids')
+        Lookup.build(docnos, full_index_path)
         
 
-        #final_docno_file = os.path.join(full_index_path, "docnos.tsv")
-        #os.rename(temp_docno_file, final_docno_file)
-
+        print("#> done")
+        

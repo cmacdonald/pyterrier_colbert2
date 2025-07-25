@@ -349,40 +349,28 @@ class ColBERTv2Index(ColBERTModelOnlyFactory):
         self.docno_mapping = {}
 
         # Load the docno mappings from the permanent file
-        docno_file = os.path.join(index_location, "docnos.tsv")
+        docno_file = os.path.join(index_location, "docnos.npids")
+        from npids import Lookup
+        self.docnos = Lookup(docno_file)
 
-        with open(docno_file, 'r') as f:
-            for line in f:
-                parts = line.strip().split('\t')
-                if len(parts) >= 2:
-                    line_idx = int(parts[0])
-                    docno = parts[1]
-                    self.docno_mapping[line_idx] = docno
-        
-        #delete the temporary text file
-        temp_text_file = "temp_texts.tsv"
-        if os.path.exists(temp_text_file):
-            os.remove(temp_text_file)
-            print(f"Temporary text file {temp_text_file} deleted successfully.")
-        else:
-            print(f"Temporary text file {temp_text_file} not found or already deleted.")
 
     def end_to_end(self, k=100) -> pt.Transformer:
         def _search(df_query):
-            # TODO make df_queries into a colbert.Queries object
+            if len(df_query) == 0:
+                return pd.DataFrame(columns=["qid", "docno", "score", "rank"])
+            
+            # TODO can we make df_queries into a colbert.Queries object
             assert len(df_query) == 1
             # encode Q
             Q = self.searcher.encode([df_query.iloc[0]["query"]])
       
             # call colbert.Searcher
-            doc_ids, ranks, scores = self.searcher.dense_search(Q, k=k)
-            
-            # convert ranking into df_results dataframe
-            df_results  = []
-            for idx, docid in enumerate(doc_ids):
-                docno = self.docno_mapping.get(docid, "unknown_docno")
-                df_results.append([df_query.iloc[0]["qid"], docno, scores[idx], ranks[idx]])
-
-            df_results = pd.DataFrame(df_results, columns=["qid", "docno", "score", "rank"])
-            return df_results
+            docids, ranks, scores = self.searcher.dense_search(Q, k=k)
+            docnos = self.docnos.fwd[docids]
+            return pd.DataFrame({
+                "qid": df_query.iloc[0]["qid"],
+                "docno": docnos,
+                "score": scores,
+                "rank": ranks
+            })
         return pt.apply.by_query(_search)
