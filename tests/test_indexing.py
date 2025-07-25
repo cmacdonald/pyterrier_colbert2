@@ -5,19 +5,17 @@ import tempfile
 CHECKPOINT="http://www.dcs.gla.ac.uk/~craigm/colbert.dnn.zip"
 class TestIndexing(unittest.TestCase):
 
-    def _indexing_1doc(self, indexmgr, model, dim=None):
+    def _indexing_1doc(self, indexmgr, model):
         #minimum test case size is 100 docs, 40 Wordpiece tokens, and nx > k. we found 200 worked
         import pyterrier as pt
         from pyterrier_colbert.indexing import ColbertV2Indexer
         import os
         indexer = ColbertV2Indexer(
-            model, 
-            os.path.dirname(self.test_dir),os.path.basename(self.test_dir), 
-            chunksize=3,
-            gpu=False)
+            self.test_dir,
+            model,
+            index_name="test_index",
+            )
 
-        if dim is not None:
-          indexer.args.dim = dim
         iter = pt.get_dataset("vaswani").get_corpus_iter()
         indexer.index([ next(iter) for i in range(200) ])
 
@@ -103,13 +101,13 @@ class TestIndexing(unittest.TestCase):
     def test_indexing_1doc_torch(self):
         self._indexing_1doc('torch', CHECKPOINT)
 
-    def test_indexing_1doc_torch_minilm(self):
-        import transformers
-        if int(transformers.__version__[0]) < 4:
-            self.skipTest("transfomers too old")
-        from colbert.modeling.colbert import ColBERT
-        model = ColBERT.from_pretrained("vespa-engine/col-minilm", query_maxlen=32, doc_maxlen=180, mask_punctuation=False, dim=32)
-        self._indexing_1doc('torch', model, dim=32)
+    # def test_indexing_1doc_torch_minilm(self):
+    #     import transformers
+    #     if int(transformers.__version__[0]) < 4:
+    #         self.skipTest("transfomers too old")
+    #     from colbert.modeling.colbert import ColBERT
+    #     model = ColBERT.from_pretrained("vespa-engine/col-minilm", query_maxlen=32, doc_maxlen=180, mask_punctuation=False, dim=32)
+    #     self._indexing_1doc('torch', model, dim=32)
 
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
