@@ -30,10 +30,10 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         self.docnos = Lookup(docno_file)
 
 
-    def end_to_end(self, k=100) -> pt.Transformer:
+    def end_to_end(self, k=1000) -> pt.Transformer:
         def _search(df_query):
             if len(df_query) == 0:
-                return pd.DataFrame(columns=["qid", "docno", "score", "rank"])
+                return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
             
             # TODO can we make df_queries into a colbert.Queries object
             assert len(df_query) == 1
@@ -43,9 +43,15 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
             # call colbert.Searcher
             docids, ranks, scores = self.searcher.dense_search(Q, k=k)
             docnos = self.docnos.fwd[docids]
-            assert len(docnos) == len(scores)
+
+            # interestingly, ranks can be longers, i.e. we can retrieve 
+            # less documents than k, but ranks will still be of length k 
+            if len(ranks) > len(scores):
+                ranks = ranks[0:len(scores)]
+
             return pd.DataFrame({
                 "qid": [df_query.iloc[0]["qid"]] * len(docnos),
+                "query": [df_query.iloc[0]["query"]] * len(docnos),
                 "docno": docnos,
                 "score": scores,
                 "rank": ranks
