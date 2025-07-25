@@ -341,7 +341,7 @@ class ColBERTModelOnlyFactory():
         return pt.apply.by_query(_score_query, add_ranks=True)
     
 
-class ColBERTv2Index(ColBERTModelOnlyFactory):
+class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
     def __init__(self, colbert, index_location, **kwargs):
         super().__init__(colbert, **kwargs)
