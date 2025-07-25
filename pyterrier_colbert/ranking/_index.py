@@ -1,15 +1,15 @@
-from ._modelonly import ColBERTModelOnlyFactory
+from . import ColBERTModelOnlyFactory
 
 import pandas as pd
 import pyterrier as pt
 
 from pyterrier import tqdm
-from colbert.evaluation.load_model import load_model
-from .. import load_checkpoint
+#from colbert.evaluation.load_model import load_model
+#from .. import load_checkpoint
 # monkeypatch to use our downloading version
-import colbert.evaluation.loaders
-colbert.evaluation.loaders.load_checkpoint = load_checkpoint
-colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
+#import colbert.evaluation.loaders
+#colbert.evaluation.loaders.load_checkpoint = load_checkpoint
+#colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
 from colbert.searcher import Searcher
 from warnings import warn
 

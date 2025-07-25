@@ -5,18 +5,17 @@ import pyterrier as pt
 
 from pyterrier import tqdm
 from typing import Union, Tuple
-from colbert.evaluation.load_model import load_model
-from .. import load_checkpoint
-# monkeypatch to use our downloading version
-import colbert.evaluation.loaders
-colbert.evaluation.loaders.load_checkpoint = load_checkpoint
-colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
+# from colbert.evaluation.load_model import load_model
+# from .. import load_checkpoint
+# # monkeypatch to use our downloading version
+# import colbert.evaluation.loaders
+# colbert.evaluation.loaders.load_checkpoint = load_checkpoint
+# colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
 from colbert.modeling.checkpoint import Checkpoint  # modified from colbert.inference import Checkpoint
 from colbert.modeling.colbert import ColBERT  # add a new method to use BaseColBERT
 from colbert.modeling.colbert import colbert_score #add a new score method
 from colbert.modeling.tokenization import QueryTokenizer, DocTokenizer # to build query/doc from text manually
 from colbert.infra import ColBERTConfig  # add ColBERTConfig
-from colbert.indexing.loaders import get_parts, load_doclens
 
 from warnings import warn
 

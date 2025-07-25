@@ -1,42 +1,19 @@
 import pyterrier as pt
 import os
-import json
-import torch
-import numpy as np
-from colbert.indexing.loaders import load_doclens
-import ujson
-import random
-import copy
-import queue
-import math
-from colbert.utils.parser import Arguments
-import colbert.utils.distributed as distributed
 from warnings import warn
-from colbert.utils.utils import create_directory
 
-import time
 import torch
-import ujson
 import numpy as np
-
-import itertools
-import threading
-import queue
 
 from colbert.infra import Run, RunConfig, ColBERTConfig
 from colbert import Indexer
-from colbert.evaluation.loaders import load_colbert
-from . import load_checkpoint
-# monkeypatch to use our downloading version
-import colbert.evaluation.loaders
-colbert.evaluation.loaders.load_checkpoint = load_checkpoint
-colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
+#from colbert.evaluation.loaders import load_colbert
+# from . import load_checkpoint
+# # monkeypatch to use our downloading version
+# import colbert.evaluation.loaders
+# colbert.evaluation.loaders.load_checkpoint = load_checkpoint
+# colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
 from colbert.utils.utils import print_message
-import pickle
-from colbert.indexing.index_manager import IndexManager
-from warnings import warn
-
-DEBUG=False
 
 
 class Object(object):
@@ -99,6 +76,6 @@ class ColbertV2Indexer(pt.Indexer):
         
 
         print("#> done")
-        from .ranking import ColBERTv2Index
-        ranker = ColBERTv2Index(self.checkpoint, full_index_path)
+        import pyterrier_colbert.ranking
+        ranker = pyterrier_colbert.ranking.ColBERTv2Index(self.checkpoint, full_index_path)
         return ranker

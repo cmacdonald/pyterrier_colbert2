@@ -3,12 +3,15 @@
 #ranking = importlib.import_module('.' + 'indexing', package='pyterrier_colbert') 
 #ranking = importlib.import_module('.' + 'ranking', package='pyterrier_colbert')
 
+from . import ranking
+from . import indexing
 
-import torch
-from colbert.utils.utils import print_message
-from collections import OrderedDict, defaultdict
 
 def load_checkpoint(path, model, optimizer=None, do_print=True):
+    import torch
+    from colbert.utils.utils import print_message
+    from collections import OrderedDict
+
     if do_print:
         print_message("#> Loading checkpoint", path)
 
