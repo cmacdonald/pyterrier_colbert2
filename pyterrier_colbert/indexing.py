@@ -96,7 +96,7 @@ class ColbertV2Indexer(pt.Indexer):
 
         print("#> V2 recording docnos")
         from npids import Lookup
-        Lookup.build(docnos, full_index_path)
+        Lookup.build(docnos, docnos_file)
         
 
         print("#> done")
