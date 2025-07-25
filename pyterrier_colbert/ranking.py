@@ -348,7 +348,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         super().__init__(colbert, **kwargs)
         import os
         dirs = os.path.split(index_location)
-        self.searcher = Searcher(index_location[-1], index_root=os.path.join(dirs[0:-1]))
+        self.searcher = Searcher(dirs[-1], index_root=os.path.join(dirs[0:-1]))
         self.docno_mapping = {}
 
         # Load the docno mappings from the permanent file
