@@ -344,8 +344,11 @@ class ColBERTModelOnlyFactory():
 class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
     def __init__(self, colbert, index_location, **kwargs):
+        # TODO do we need the colbert checkpoint....; Searcher will load it too.
         super().__init__(colbert, **kwargs)
-        self.searcher = Searcher(index_location)
+        import os
+        dirs = os.path.split(index_location)
+        self.searcher = Searcher(index_location[-1], index_root=dirs[0:-1])
         self.docno_mapping = {}
 
         # Load the docno mappings from the permanent file
