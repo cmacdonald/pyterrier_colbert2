@@ -24,8 +24,8 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         # TODO do we need the colbert checkpoint....; Searcher will load it too.
 
         # call both super-class constructors
-        super(ColBERTModelOnlyFactory, self).__init__(colbert, **kwargs)
-        super(pt.Artifact, self).__init__(index_location)
+        ColBERTModelOnlyFactory.__init__(self, colbert, **kwargs)
+        pt.Artifact.__init__(self, index_location)
         import os
         dirs = os.path.split(index_location)
         self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
