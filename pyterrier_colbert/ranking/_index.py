@@ -64,3 +64,63 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                 "rank": ranks
             })
         return pt.apply.by_query(_search, add_ranks=False)
+
+
+class PlaidIndex(ColBERTModelOnlyFactory):
+    """
+    A PLAID retrieval wrapper using low-level candidate generation and scoring.
+    Requires an index built with ivf.pid.pt (optimised inverted file).
+    """
+    def __init__(self, colbert, index_location,
+                 ncells=2, centroid_score_threshold=0.45, ndocs=1024, **kwargs):
+        super().__init__(colbert, **kwargs)
+        # Load the index and configure PLAID parameters
+        self.searcher = Searcher(index_location)
+        # Set PLAID-specific parameters on the searcher’s config
+        self.searcher.configure(ncells=ncells,
+                                centroid_score_threshold=centroid_score_threshold,
+                                ndocs=ndocs)
+        # Load docno mapping
+        self.docno_mapping = {}
+        docno_file = os.path.join(index_location, "docnos.tsv")
+        with open(docno_file, 'r') as f:
+            for line in f:
+                parts = line.strip().split('\t')
+                if len(parts) >= 2:
+                    line_idx = int(parts[0])
+                    docno = parts[1]
+                    self.docno_mapping[line_idx] = docno
+
+    def end_to_end(self, k=100) -> pt.Transformer:
+        def _search(df_query):
+            assert len(df_query) == 1
+            query_text = df_query.iloc[0]["query"]
+            qid = df_query.iloc[0]["qid"]
+
+            # Encode the query
+            Q = self.searcher.encode([query_text])
+
+            # PLAID candidate generation: returns pids and centroid_scores
+            pids, centroid_scores = self.searcher.ranker.generate_candidates(
+                self.searcher.config, Q
+            )
+
+            # PLAID centroid interaction, pruning and final scoring
+            # score_pids returns (scores, pids)
+            scores, pids = self.searcher.ranker.score_pids(
+                self.searcher.config, Q, pids, centroid_scores
+            )
+
+            # Extract the top-k results
+            topk = min(k, len(pids))
+            top_indices = scores.argsort(descending=True)[:topk]
+            results = []
+            for rank, idx in enumerate(top_indices):
+                pid = pids[idx].item()
+                docno = self.docno_mapping.get(pid, "unknown_docno")
+                score = scores[idx].item()
+                results.append([qid, docno, score, rank + 1])
+
+            return pd.DataFrame(results, columns=["qid", "docno", "score", "rank"])
+
+        return pt.apply.by_query(_search)
