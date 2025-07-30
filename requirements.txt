@@ -2,3 +2,4 @@ python-terrier>=0.13.1
 pandas
 git+https://github.com/stanford-futuredata/ColBERT.git#egg=colbert-ai
 scikit-learn
+npids
