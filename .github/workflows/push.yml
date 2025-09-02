@@ -7,7 +7,7 @@ jobs:
     
     strategy:
       matrix:
-        python: [3.8]
+        python: [3.12]
         java: [13]
         os: ['ubuntu-latest'] # 
         architecture: ['x64']
@@ -62,3 +62,4 @@ jobs:
         TERRIER_VERSION: ${{ matrix.terrier }}
       run: |
         pytest -s
+
