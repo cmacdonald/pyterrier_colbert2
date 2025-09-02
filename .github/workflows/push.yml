@@ -48,12 +48,9 @@ jobs:
     - name: Install Python dependencies
       run: |
         conda install pip
-        conda install mkl_fft -y
-        conda install -c pytorch faiss-cpu=1.6.3
-        pip install --upgrade --upgrade-strategy eager git+https://github.com/terrier-org/pyterrier.git#egg=python-terrier torch faiss-cpu
-        pip install --upgrade --upgrade-strategy eager -r requirements.txt
-        #install this software
-        pip install --timeout=120 .
+        conda install -c pytorch faiss-cpu
+        pip install --upgrade --upgrade-strategy eager git+https://github.com/terrier-org/pyterrier.git#egg=python-terrier
+        pip install .
         pip install --upgrade --upgrade-strategy eager pytest
         conda list
 
@@ -62,4 +59,5 @@ jobs:
         TERRIER_VERSION: ${{ matrix.terrier }}
       run: |
         pytest -s
+
 
