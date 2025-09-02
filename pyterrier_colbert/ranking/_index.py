@@ -30,13 +30,14 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         import os
         dirs = os.path.split(index_location)
         self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
-        self.docno_mapping = {}
 
         # Load the docno mappings from the permanent file
         docno_file = os.path.join(index_location, "docnos.npids")
         from npids import Lookup
         self.docnos = Lookup(docno_file)
 
+    def __len__(self):
+        return len(self.docnos)
 
     def end_to_end(self, k=1000) -> pt.Transformer:
         def _search(df_query):
