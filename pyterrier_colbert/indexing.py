@@ -27,6 +27,9 @@ class ColbertV2Indexer(pt.Indexer):
         self.index_name = index_name
         self.nbits = nbits
 
+    def index_inputs(self):
+        return [['docno', 'text']]
+
     def index(self, iter_dict):
 
         if not os.path.exists(self.index_location):
@@ -67,3 +70,4 @@ class ColbertV2Indexer(pt.Indexer):
         import pyterrier_colbert.ranking
         ranker = pyterrier_colbert.ranking.ColBERTv2Index(self.checkpoint, full_index_path)
         return ranker
+
