@@ -2,6 +2,7 @@ from . import ColBERTModelOnlyFactory
 
 import pandas as pd
 import pyterrier as pt
+import pyterrier_alpha as pta
 
 from pyterrier import tqdm
 #from colbert.evaluation.load_model import load_model
@@ -39,6 +40,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
     def end_to_end(self, k=1000) -> pt.Transformer:
         def _search(df_query):
+            pta.validate.query_frame(extra_columns=['query']
             if len(df_query) == 0:
                 return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
             
