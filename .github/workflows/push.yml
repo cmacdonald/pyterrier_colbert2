@@ -47,8 +47,7 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        pip install torch
-        conda install -c pytorch faiss-cpu
+        pip install torch faiss-cpu
         pip install --upgrade --upgrade-strategy eager git+https://github.com/terrier-org/pyterrier.git#egg=python-terrier
         pip install .
         pip install --upgrade --upgrade-strategy eager pytest
@@ -59,6 +58,7 @@ jobs:
         TERRIER_VERSION: ${{ matrix.terrier }}
       run: |
         pytest -s
+
 
 
 
