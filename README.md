@@ -1,8 +1,10 @@
 # pyterrier-colbert & ColBERT-PRF
 
-** THIS README IS OUT OF DATA **
+** THIS README IS OUT OF DATE **
 
 See vaswani.ipynb for usage
+
+----
 
 
 Advanced [PyTerrier](https://github.com/terrier-org/pyterrier) bindings for [ColBERT](https://github.com/stanford-futuredata/ColBERT/), including for dense indexing and retrieval. This also includes the implementations of [ColBERT PRF](https://arxiv.org/abs/2106.11251), [approximate ANN scoring](https://arxiv.org/abs/2108.11480) and [query embedding pruning](https://arxiv.org/abs/2108.10341). 
@@ -131,4 +133,5 @@ On Colab, you need to resort to pip install. We recommend faiss-gpu version 1.6.
  - Muhammad Hammad Khan, University of Glasgow
  - Sean MacAvaney, University of Glasgow
  - Sasha Petrov, University of Glasgow
+
 
