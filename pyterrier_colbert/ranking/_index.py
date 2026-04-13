@@ -3,6 +3,8 @@ from . import ColBERTModelOnlyFactory
 import pandas as pd
 import pyterrier as pt
 import os
+from typing import Optional
+import json
 from pyterrier import tqdm
 #from colbert.evaluation.load_model import load_model
 #from .. import load_checkpoint
@@ -22,9 +24,16 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
     ARTIFACT_FORMAT = 'colbert'
     ARTIFACT_PACKAGE_HINT = 'pyterrier_colbert2'
 
-    def __init__(self, colbert, index_location, plaid_mode=False,
+    def __init__(self, index_location : str, plaid_mode=False, colbert : Optional[str] = None,
     ncells=None, centroid_score_threshold=None, ndocs=None, **kwargs):
         # TODO do we need the colbert checkpoint....; Searcher will load it too.
+
+        with open(os.path.join(index_location,'pt_meta.json'), 'rt') as f_meta:
+            meta = json.load(f_meta)
+            assert meta.get('type') == 'dense_index' and meta['format'] == 'colbert'
+            self._meta = meta
+            if colbert is not None:
+                colbert = self._meta.get('model_checkpoint', colbert)
 
         # call both super-class constructors
         ColBERTModelOnlyFactory.__init__(self, colbert, **kwargs)
