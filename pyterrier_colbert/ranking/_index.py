@@ -32,7 +32,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
             meta = json.load(f_meta)
             assert meta.get('type') == 'dense_index' and meta['format'] == 'colbert'
             self._meta = meta
-            if colbert is not None:
+            if colbert is None:
                 colbert = self._meta.get('model_checkpoint', colbert)
 
         # call both super-class constructors
