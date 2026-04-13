@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyterrier-colbert"
+version = "2.0.0"
+description = "PyTerrier components for ColBERT"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.6"
+authors = [
+  { name = "Craig Macdonald" },
+]
+dependencies = [
+  "colbert-ai",
+  "npids",
+  "python-terrier>=0.13.1",
+  "pandas",
+  "colbert-ai @ git+https://github.com/stanford-futuredata/ColBERT.git",
+  "scikit-learn",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
