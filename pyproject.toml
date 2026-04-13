@@ -12,7 +12,6 @@ authors = [
   { name = "Craig Macdonald" },
 ]
 dependencies = [
-  "colbert-ai",
   "npids",
   "python-terrier>=0.13.1",
   "pandas",
