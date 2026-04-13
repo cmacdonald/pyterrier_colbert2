@@ -9,7 +9,7 @@ description = "PyTerrier components for ColBERT"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.6"
 authors = [
-  { name = "Craig Macdonald" },
+  { name = "Craig Macdonald", email = "craigm@dcs.gla.ac.uk" },
 ]
 dependencies = [
   "npids",
