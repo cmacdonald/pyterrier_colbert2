@@ -17,7 +17,11 @@ dependencies = [
   "pandas",
   "colbert-ai @ git+https://github.com/stanford-futuredata/ColBERT.git",
   "scikit-learn",
+  "transformers<5"
 ]
+
+[project.entry-points."pyterrier.artifact"]
+"dense_index.colbert" = "pyterrier_colbert.ranking:ColBERTv2Index"
 
 [tool.setuptools.packages.find]
 where = ["."]
