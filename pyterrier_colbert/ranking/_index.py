@@ -59,8 +59,9 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
     End-to-end retrieval wrapper using dense_search. 
     in particular, searcher.dense_search maybe with different configs for colbertv2 and plaid.
     """
-    def end_to_end(self, k=1000) -> pt.Transformer: 
+    def end_to_end(self, k=1000, decompose=False) -> pt.Transformer: 
         def _search(df_query):
+            pt.validate.query_frame(df_query, extra_columns=["query"])
             if len(df_query) == 0:
                 return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
             
@@ -73,11 +74,11 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
             docids, ranks, scores = self.searcher.dense_search(Q, k=k)
             docnos = self.docnos.fwd[docids]
 
-            # interestingly, ranks can be longers, i.e. we can retrieve 
-            # less documents than k, but ranks will still be of length k 
-            if len(ranks) > len(scores):
-                ranks = ranks[0:len(scores)]
-
+            # ignore the ranks returned by the searcher and re-assign them based on the sorted order of scores, 
+            # to ensure consistency between colbertv2 and plaid modes. This is because in plaid mode, the searcher 
+            # may return fewer than k results due to pruning; also ensures they start at pt.model.FIRST_RANK
+            ranks = ranks[0:len(scores)]
+            ranks = [pt.model.FIRST_RANK + i for i in range(len(ranks))]
             return pd.DataFrame({
                 "qid": [df_query.iloc[0]["qid"]] * len(docnos),
                 "query": [df_query.iloc[0]["query"]] * len(docnos),
@@ -85,7 +86,11 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                 "score": scores,
                 "rank": ranks
             })
-        return pt.apply.by_query(_search, add_ranks=False)
+
+        if decompose:
+            assert self.plaid_mode == True, "Decomposed search is only supported in PLAID mode"
+            return self.plaid_candidate_generation() >> self.plaid_centroid_interaction() >> self.plaid_centroid_pruning() >> self.plaid_final_scoring(k=k)
+        return pt.apply.by_query(_search, add_ranks=False, label="PLAID" if self.plaid_mode else "ColBERTv2")
 
     """
     More specifically, a PLAID retrieval wrapper using  candidate generation
@@ -101,6 +106,10 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         """
         assert self.plaid_mode == True
         def _generate(df_query):
+            pt.validate.query_frame(df_query, extra_columns=["query"])
+            if len(df_query) == 0:
+                return pd.DataFrame(columns=["qid", "query", "Q_embs", "pids", "score"])
+            
             assert len(df_query) == 1
             row = df_query.iloc[0]
             qid, query = row.qid, row.query
@@ -115,7 +124,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                 "pids": pids,
                 "score": centroid_scores # centroid_scores before centroid interaction
             }])
-        return pt.apply.by_query(_generate)
+        return pt.apply.by_query(_generate, label="plaid_candidate_generation")
 
     def plaid_centroid_interaction(self) -> pt.Transformer:
         """
@@ -125,6 +134,9 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         """
         assert self.plaid_mode == True
         def _interact(df):
+            pt.validate.query_frame(df, extra_columns=["query", "pids", "score"])
+            if len(df) == 0:
+                return pd.DataFrame(columns=["qid", "query", "pid", "docno", "score"])
             rows = []
             for _, r in df.iterrows():
                 qid, query = r.qid, r.query
@@ -147,7 +159,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                         "score": approx.item() # approx_score after centroid interaction
                     })
             return pd.DataFrame(rows)
-        return pt.apply.generic(_interact)
+        return pt.apply.generic(_interact, label="plaid_centroid_interaction")
 
     def plaid_centroid_pruning(self) -> pt.Transformer:
         """
@@ -159,12 +171,15 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
         ndocs = self.searcher.config.ndocs
         def _prune(df):
+            pt.validate.result_frame(df, extra_columns=["query", "score"])
+            if len(df) == 0:
+                return pd.DataFrame(columns=["qid", "query", "pid", "docno", "score"])
             pruned_rows = []
             for qid, group in df.groupby("qid"):
                 pruned = group.sort_values("score", ascending=False).head(ndocs) # scores are  the approx_scores after centroid interaction
                 pruned_rows.append(pruned[["qid", "query", "pid", "docno"]])
             return pd.concat(pruned_rows).reset_index(drop=True)
-        return pt.apply.generic(_prune)
+        return pt.apply.generic(_prune, label="plaid_centroid_pruning")
 
     def plaid_final_scoring(self, k=1000) -> pt.Transformer:
         """
@@ -174,11 +189,14 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         """
         assert self.plaid_mode == True
         def _score(df):
+            pt.validate.result_frame(df, extra_columns=["query", "pid"])
+            if len(df) == 0:
+                return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
             results = []
             for qid, group in df.groupby("qid"):
                 query = group["query"].iloc[0]
                 Q = self.searcher.encode([query])
-                pids = torch.tensor(group["pid"].tolist())
+                pids = torch.tensor(group["pid"].tolist()).int()
                 # Pass centroid_scores=None to disable further pruning and get final scores
                 scores, pids_scored = self.searcher.ranker.score_pids(
                     self.searcher.config, Q, pids, centroid_scores=None
@@ -197,4 +215,4 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                         "rank": rank + 1
                     })
             return pd.DataFrame(results, columns=["qid", "docno", "score", "rank"])
-        return pt.apply.by_query(_score)
+        return pt.apply.by_query(_score, label="plaid_final_scoring")

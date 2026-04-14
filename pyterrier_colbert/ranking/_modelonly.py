@@ -69,6 +69,9 @@ class ColBERTModelOnlyFactory():
                 return pd.Series([Q[0]])
             
         def row_apply(df):
+            pt.validate.query_frame(df, extra_columns=["query"])
+            if len(df) == 0:
+                return pd.DataFrame(columns=df.columns + ["query_embs"])
             if "docno" in df.columns or "docid" in df.columns:
                 warn("You are query encoding an R dataframe, the query will be encoded for each row")
             df["query_embs"] = df.apply(_encode_query, axis=1)
@@ -86,6 +89,9 @@ class ColBERTModelOnlyFactory():
             for pos in range(0, len(seq), size):
                 yield seq.iloc[pos:pos + size]
         def df_apply(df):
+            pt.validate.document_frame(df, extra_columns=["text"])
+            if len(df) == 0:
+                return pd.DataFrame(columns=set(["docno", "text", "doc_embs", "doc_toks"]) | set(df.columns))
             with torch.no_grad():
                 rtr_embs = []
                 rtr_toks = []
@@ -252,7 +258,6 @@ class ColBERTModelOnlyFactory():
         """
         import torch
         import pyterrier as pt
-        assert pt.started(), 'PyTerrier must be started'
         cuda0 = torch.device('cuda') if gpu else torch.device('cpu')
 
         def _build_interaction(row, D):
@@ -266,6 +271,14 @@ class ColBERTModelOnlyFactory():
             idsD[row.row_index, 0:doc_len] = doc_toks
         
         def _score_query(df):
+            pt.validate.result_frame(df, extra_columns=["query", "query_embs", "doc_embs"])
+            if len(df) == 0:
+                columns = set(df.columns) | set(["query", "query_embs", "doc_embs", "score"])
+                if add_contributions:
+                    columns.add("contributions")
+                if add_exact_match_contribution:
+                    columns.update(["exact_numer", "exact_denom", "exact_pct"])
+                return pd.DataFrame(columns=list(columns))
             with torch.no_grad():
                 weightsQ = None
                 Q = torch.cat([df.iloc[0].query_embs])
