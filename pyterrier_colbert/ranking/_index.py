@@ -26,8 +26,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
     def __init__(self, index_location : str, plaid_mode=False, colbert : Optional[str] = None,
     ncells=None, centroid_score_threshold=None, ndocs=None, **kwargs):
-        # TODO do we need the colbert checkpoint....; Searcher will load it too.
-
+        
         with open(os.path.join(index_location,'pt_meta.json'), 'rt') as f_meta:
             meta = json.load(f_meta)
             assert meta.get('type') == 'dense_index' and meta['format'] == 'colbert'
@@ -54,6 +53,8 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         from npids import Lookup
         self.docnos = Lookup(docno_file)
 
+    def __len__(self):
+        return len(self.docnos)
 
     """
     End-to-end retrieval wrapper using dense_search. 
