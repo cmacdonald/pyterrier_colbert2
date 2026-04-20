@@ -75,5 +75,5 @@ class ColbertV2Indexer(pt.Indexer):
 
         print("#> done")
         import pyterrier_colbert.ranking
-        ranker = pyterrier_colbert.ranking.ColBERTv2Index(self.checkpoint, full_index_path)
+        ranker = pyterrier_colbert.ranking.ColBERTv2Index(full_index_path, colbert=self.checkpoint)
         return ranker
