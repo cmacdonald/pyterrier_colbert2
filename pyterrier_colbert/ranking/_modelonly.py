@@ -87,7 +87,9 @@ class ColBERTModelOnlyFactory():
             for pos in range(0, len(seq), size):
                 yield seq.iloc[pos:pos + size]
         def df_apply(df):
-            pt.validate.document_frame(df, extra_columns=["text"])
+            with pt.validate.any(df) as v:
+                v.document_frame(extra_columns=["text"])
+                v.result_frame(extra_columns=["text"])
             if len(df) == 0:
                 return pd.DataFrame(columns=set(["docno", "text", "doc_embs", "doc_toks"]) | set(df.columns))
             with torch.no_grad():
