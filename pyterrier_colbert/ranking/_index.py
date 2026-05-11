@@ -1,3 +1,5 @@
+import warnings # to remove the autocast warning
+
 from . import ColBERTModelOnlyFactory
 
 import pandas as pd
@@ -6,12 +8,6 @@ import os
 from typing import Optional
 import json
 from pyterrier import tqdm
-#from colbert.evaluation.load_model import load_model
-#from .. import load_checkpoint
-# monkeypatch to use our downloading version
-#import colbert.evaluation.loaders
-#colbert.evaluation.loaders.load_checkpoint = load_checkpoint
-#colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
 from colbert.searcher import Searcher
 from warnings import warn
 import torch
@@ -62,31 +58,37 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
     """
     def end_to_end(self, k=1000, decompose=False) -> pt.Transformer: 
         def _search(df_query):
-            pt.validate.query_frame(df_query, extra_columns=["query"])
-            if len(df_query) == 0:
-                return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
-            
-            # TODO can we make df_queries into a colbert.Queries object to allow parallelisation?
-            assert len(df_query) == 1
-            # encode Q
-            Q = self.searcher.encode([df_query.iloc[0]["query"]])
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r"`torch\.cuda\.amp\.autocast\(args\.\.\.\)` is deprecated",
+                    category=FutureWarning,
+                )
+                pt.validate.query_frame(df_query, extra_columns=["query"])
+                if len(df_query) == 0:
+                    return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
+                
+                # TODO can we make df_queries into a colbert.Queries object to allow parallelisation?
+                assert len(df_query) == 1
+                # encode Q
+                Q = self.searcher.encode([df_query.iloc[0]["query"]])
 
-            # call colbert.Searcher or plaid if plaid_mode is True
-            docids, ranks, scores = self.searcher.dense_search(Q, k=k)
-            docnos = self.docnos.fwd[docids]
+                # call colbert.Searcher or plaid if plaid_mode is True
+                docids, ranks, scores = self.searcher.dense_search(Q, k=k)
+                docnos = self.docnos.fwd[docids]
 
-            # ignore the ranks returned by the searcher and re-assign them based on the sorted order of scores, 
-            # to ensure consistency between colbertv2 and plaid modes. This is because in plaid mode, the searcher 
-            # may return fewer than k results due to pruning; also ensures they start at pt.model.FIRST_RANK
-            ranks = ranks[0:len(scores)]
-            ranks = [pt.model.FIRST_RANK + i for i in range(len(ranks))]
-            return pd.DataFrame({
-                "qid": [df_query.iloc[0]["qid"]] * len(docnos),
-                "query": [df_query.iloc[0]["query"]] * len(docnos),
-                "docno": docnos,
-                "score": scores,
-                "rank": ranks
-            })
+                # ignore the ranks returned by the searcher and re-assign them based on the sorted order of scores, 
+                # to ensure consistency between colbertv2 and plaid modes. This is because in plaid mode, the searcher 
+                # may return fewer than k results due to pruning; also ensures they start at pt.model.FIRST_RANK
+                ranks = ranks[0:len(scores)]
+                ranks = [pt.model.FIRST_RANK + i for i in range(len(ranks))]
+                return pd.DataFrame({
+                    "qid": [df_query.iloc[0]["qid"]] * len(docnos),
+                    "query": [df_query.iloc[0]["query"]] * len(docnos),
+                    "docno": docnos,
+                    "score": scores,
+                    "rank": ranks
+                })
 
         if decompose:
             assert self.plaid_mode == True, "Decomposed search is only supported in PLAID mode"
