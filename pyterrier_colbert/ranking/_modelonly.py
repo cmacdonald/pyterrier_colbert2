@@ -72,8 +72,6 @@ class ColBERTModelOnlyFactory():
             pt.validate.query_frame(df, extra_columns=["query"])
             if len(df) == 0:
                 return pd.DataFrame(columns=df.columns + ["query_embs"])
-            if "docno" in df.columns or "docid" in df.columns:
-                warn("You are query encoding an R dataframe, the query will be encoded for each row")
             df["query_embs"] = df.apply(_encode_query, axis=1)
             return df
         
@@ -225,6 +223,7 @@ class ColBERTModelOnlyFactory():
             return list(zip(ranked_scores, ranked_pids, ranked_passages))
 
         def _text_scorer(queries_and_docs):
+            pt.validate.result_frame(queries_and_docs, extra_columns=["query", doc_attr])
             groupby = queries_and_docs.groupby("qid")
             rtr = []
             with torch.no_grad():
@@ -236,6 +235,7 @@ class ColBERTModelOnlyFactory():
             return pd.DataFrame(rtr, columns=["qid", "query", "docno", "score", "rank"])
 
         def _text_scorer_qembs(queries_and_docs):
+            pt.validate.result_frame(queries_and_docs, extra_columns=["query_embs", "query", doc_attr])
             groupby = queries_and_docs.groupby("qid")
             rtr = []
             with torch.no_grad():
