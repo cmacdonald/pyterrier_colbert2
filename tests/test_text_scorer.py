@@ -16,7 +16,7 @@ class TestTextScoring(unittest.TestCase):
     # def test_prf_text(self):
     #     from pyterrier_colbert.ranking import ColbertPRF
 
-    #     basescorer = self.factory.text_scorer()
+    #     basescorer = self.ffactory.text_scorer()
     #     basertr = basescorer.transform(self.df).sort_values('docno')
 
     #     # monkey patch in an FNT from another index 
@@ -63,7 +63,6 @@ class TestTextScoring(unittest.TestCase):
         qend = self.factory.query_encoder()
         rtr = qend(queries)
         self.assertTrue("query_embs" in rtr.columns)
-        self.assertTrue("query_toks" in rtr.columns)
 
     def test_text_scorer_with_qembs(self):
         scorer = self.factory.text_scorer()

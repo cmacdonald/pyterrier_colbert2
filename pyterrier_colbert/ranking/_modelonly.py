@@ -81,28 +81,28 @@ class ColBERTModelOnlyFactory():
         """
         Returns a transformer that can encode the text using ColBERT's model.
         input: qid, text
-        output: qid, text, doc_embs, doc_toks,
+        output: qid, text, doc_embs
         """
         def chunker(seq, size):
             for pos in range(0, len(seq), size):
                 yield seq.iloc[pos:pos + size]
         def df_apply(df):
             with pt.validate.any(df) as v:
-                v.document_frame(extra_columns=["text"])
                 v.result_frame(extra_columns=["text"])
+                v.document_frame(extra_columns=["text"])
             if len(df) == 0:
-                return pd.DataFrame(columns=set(["docno", "text", "doc_embs", "doc_toks"]) | set(df.columns))
+                return pd.DataFrame(columns=set(["docno", "text", "doc_embs"]) | set(df.columns))
             with torch.no_grad():
                 rtr_embs = []
                 rtr_toks = []
                 for chunk in chunker(df, batch_size):
-                    embsD, idsD = self.args.inference.docFromText(chunk.text.tolist(), with_ids=True)
+                    embsD = self.args.inference.docFromText(chunk.text.tolist())
                     if detach:
                         embsD = embsD.cpu()
                     rtr_embs.extend([embsD[i, : ,: ] for i in range(embsD.shape[0])])
-                    rtr_toks.extend(idsD)
+                    #rtr_toks.extend(idsD)
             df["doc_embs"] = pd.Series(rtr_embs)
-            df["doc_toks"] = pd.Series(rtr_toks)
+            #df["doc_toks"] = pd.Series(rtr_toks)
             return df
         return pt.apply.generic(df_apply)
 

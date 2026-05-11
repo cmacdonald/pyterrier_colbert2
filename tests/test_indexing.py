@@ -19,12 +19,12 @@ class TestIndexing(unittest.TestCase):
             )
 
         iter = pt.get_dataset("vaswani").get_corpus_iter()
-        indexer.index([ next(iter) for i in range(200) ])
+        factory = indexer.index([ next(iter) for i in range(200) ])
 
         #import pyterrier_colbert.pruning as pruning
         #from pyterrier_colbert.ranking import ColbertPRF
             
-        for factory in [indexer.ranking_factory()]:
+        for factory in [factory]:
 
             self.assertEqual(200, len(factory))
 
