@@ -203,8 +203,7 @@ class ColBERTModelOnlyFactory():
             Q = torch.unsqueeze(qembs, 0)
             if gpu:
                 Q = Q.cuda()
-            Q = Q.half()  # Converts the query embed to the float16 type
-
+            
             D_tuple = inference.docFromText(passages, bsize=args.bsize, keep_dims=True, to_cpu=not gpu)
 
             # Unlock the returned tuple to get the actual document embed
