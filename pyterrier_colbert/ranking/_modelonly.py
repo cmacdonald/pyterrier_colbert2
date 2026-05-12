@@ -71,7 +71,7 @@ class ColBERTModelOnlyFactory():
         def row_apply(df):
             with pt.validate.any(df) as v:
                 v.result_frame(extra_columns=["query"])
-                v.queries_frame(extra_columns=["query"])
+                v.query_frame(extra_columns=["query"])
             if len(df) == 0:
                 return pd.DataFrame(columns=df.columns + ["query_embs"])
             df["query_embs"] = df.apply(_encode_query, axis=1)

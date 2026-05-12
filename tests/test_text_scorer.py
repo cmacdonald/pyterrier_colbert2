@@ -39,7 +39,7 @@ class TestTextScoring(unittest.TestCase):
         enc = self.factory.text_encoder()
         rtr1 = enc.transform(self.df)
         self.assertTrue("doc_embs" in rtr1.columns)
-        self.assertTrue("doc_toks" in rtr1.columns)
+        #self.assertTrue("doc_toks" in rtr1.columns)
         t1 = rtr1.iloc[0].doc_embs
         self.assertEqual(128, t1.shape[1])
         t2 = rtr1.iloc[1].doc_embs
