@@ -212,13 +212,7 @@ class ColBERTModelOnlyFactory():
             if gpu:
                 D = D.cuda()
 
-            try:
-                scores = (Q @ D.permute(0, 2, 1)).max(2).values.sum(1)
-                print(f"Scores: {scores}")
-            except Exception as e:
-                print(f"Error calculating scores: {e}")
-                return []
-
+            scores = (Q @ D.permute(0, 2, 1)).max(2).values.sum(1)
             scores = scores.sort(descending=True)
             ranked = scores.indices.tolist()
             ranked_scores = scores.values.tolist()
