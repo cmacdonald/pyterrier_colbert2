@@ -96,8 +96,8 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         return pt.apply.by_query(_search, add_ranks=False, label="PLAID" if self.plaid_mode else "ColBERTv2")
 
     """
-    More specifically, a PLAID retrieval wrapper using  candidate generation
-     and centroid interaction and pruning stages.
+    More specifically, a PLAID retrieval wrapper using candidate generation
+    and centroid interaction and pruning stages.
     Requires an index built with ivf.pid.pt (optimised inverted file).
     """
 
