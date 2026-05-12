@@ -70,4 +70,6 @@ class TestTextScoring(unittest.TestCase):
         rtr = scorer.transform(self.df)  
         qe_rtr = qe_scorer.search(self.df["query"])
         self.assertTrue("score" in rtr.columns)
+        print(rtr)
+        print(qe_rtr)
         pd.testing.assert_frame_equal(rtr, qe_rtr)
