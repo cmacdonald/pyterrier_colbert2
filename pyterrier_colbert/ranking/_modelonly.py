@@ -212,6 +212,7 @@ class ColBERTModelOnlyFactory():
             if gpu:
                 D = D.cuda()
 
+            print(f"Dtypes - Q: {Q.dtype}, D: {D.dtype}")
             scores = (Q @ D.permute(0, 2, 1)).max(2).values.sum(1)
             scores = scores.sort(descending=True)
             ranked = scores.indices.tolist()
