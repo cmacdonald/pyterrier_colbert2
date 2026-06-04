@@ -84,8 +84,9 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                 return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
             
             assert len(df_query) == 1
-            # encode Q
-            Q = torch.tensor(df_query.iloc[0]["query_vec"])
+            # fetch encoded query vector from the dataframe, and ensure it's a torch tensor on the correct device
+            val = df_query.iloc[0]["query_vec"]
+            Q = val.detach().clone() if isinstance(val, torch.Tensor) else torch.tensor(val)
             if torch.cuda.is_available():
                 Q = Q.cuda()
 
