@@ -120,7 +120,7 @@ def plaid_prf(
     def _expand(dfq):
         pt.validate.query_frame(dfq, extra_columns=["query"])
         if len(dfq) == 0:
-            return pd.DataFrame(columns=["qid", "query" "query_vec", "n_exp", "lambda_div", "exp_idx", "exp_wpids", "exp_wptoks", "exp_codes"])
+            return pd.DataFrame(columns=["qid", "query", "query_vec", "n_exp", "lambda_div", "exp_idx", "exp_wpids", "exp_wptoks", "exp_codes"])
         qid, qtext = dfq.iloc[0]["qid"], dfq.iloc[0]["query"]
 
         # 1) encode query
