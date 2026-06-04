@@ -99,7 +99,7 @@ def plaid_prf(
     rm3_lambda: float = 0.5,       # RM3 mixing coefficient
     temperature: float = 1.0,      # RM1 softmax temperature
 ):
-    idf_map, df_map, cf_map, stats = build_global_code_stats(factory.searcher.ranker.index)
+    idf_map, df_map, cf_map, stats = build_global_code_stats(factory)
     N_global = stats['N']
     N_docs = stats['N'] # TODO do we need both vars, this one is for dfr_rsj
     total_tokens = stats['tokens']
@@ -271,7 +271,7 @@ from tqdm import tqdm
 import json
 
 # @torch.no_grad()
-def build_global_code_stats(index : 'ColBERTv2Index',
+def build_global_code_stats(index,
                             batch_size: int = 1024,
                             eps: float = 1.0,
                             add_one: bool = True
