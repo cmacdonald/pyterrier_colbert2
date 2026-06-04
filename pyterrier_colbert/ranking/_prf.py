@@ -116,6 +116,9 @@ def plaid_prf(
 
     @torch.no_grad()
     def _expand(dfq):
+        pt.validate.query_frame(dfq, extra_columns=["query"])
+        if len(dfq) == 0:
+            return pd.DataFrame(columns=["qid", "query" "query_vec", "n_exp", "lambda_div", "exp_idx", "exp_wpids", "exp_wptoks", "exp_codes"])
         qid, qtext = dfq.iloc[0]["qid"], dfq.iloc[0]["query"]
 
         # 1) encode query
@@ -253,7 +256,7 @@ def plaid_prf(
             "exp_codes": exp_codes
         }])
 
-    return pt.apply.by_query(_expand, add_ranks=False)
+    return pt.apply.by_query(_expand, add_ranks=False, label="PLAID-PRF")
 
 
 
@@ -286,6 +289,17 @@ def build_global_code_stats(index,
     Rely only on `embeddings_strided.lookup_codes(pids)` and `lens`.
     """
 
+    STAT_VARS = ["idf_map", "df_map", "cf_map", "stats"]
+    exists_ok = True
+    for var in STAT_VARS:
+        if not hasattr(index, var):
+            exists_ok = False
+    if exists_ok:
+        return (getattr(index, "idf_map", None),
+                getattr(index, "df_map", None),
+                getattr(index, "cf_map", None),
+                getattr(index, "stats", None))
+
     STATS_FILES = ["stats.json", "idf_map.json", "df_map.json", "cf_map.json"]
     exists_ok = True
     for fname in STATS_FILES:
@@ -297,6 +311,11 @@ def build_global_code_stats(index,
         df_map  = _read_json(index.path / "df_map.json")
         cf_map  = _read_json(index.path / "cf_map.json")
         stats   = _read_json(index.path / "stats.json")
+        index.idf_map = idf_map
+        index.df_map  = df_map
+        index.cf_map  = cf_map
+        index.stats   = stats
+
         return idf_map, df_map, cf_map, stats
     
     print("Computing global code statistics from the index...")
@@ -377,6 +396,10 @@ def build_global_code_stats(index,
     _write_json(index.path / "df_map.json", dict(df_map))
     _write_json(index.path / "cf_map.json", dict(cf_map))
     _write_json(index.path / "stats.json", stats)
+    index.idf_map = idf_map
+    index.df_map  = df_map
+    index.cf_map  = cf_map
+    index.stats   = stats
 
     return idf_map, df_map, cf_map, stats
 
