@@ -82,7 +82,7 @@ from colbert.modeling.tokenization import DocTokenizer
 from plaid_prf_tools import *
 
 def plaid_prf(
-    factory, dataset, idf_map, N_global, eps=1.0, add_one=True,
+    factory, dataset,
     *,
     # PRF & expansion:
     top_psg=5, top_exp=16, beta=0.4, lambda_div=0.3,lambda_q=0.3,
@@ -99,6 +99,10 @@ def plaid_prf(
     N_docs: int = None,            # for dfr_rsj
 
 ):
+    idf_map, _, _, stats = build_global_code_stats(factory.searcher.ranker.index)
+    N_global = stats['N']
+    eps = stats['eps']
+    add_one = stats['add_one']
     embS = factory.searcher.ranker.embeddings_strided
     default_idf = compute_default_idf(N_global, eps, add_one)
 
@@ -323,7 +327,7 @@ from colbert.modeling.tokenization import DocTokenizer
 # from plaid_qe import *
 
 def plaid_prf(
-    factory, dataset, idf_map, N_global, eps=1.0, add_one=True,
+    factory, dataset, N_global, eps=1.0, add_one=True,
     *,
     # PRF & expansion:
     top_psg=5, top_exp=16, beta=0.4, lambda_div=0.3,
@@ -340,6 +344,7 @@ def plaid_prf(
     N_docs: int = None,            # for dfr_rsj
 
 ):
+    idf_map = build_global_code_stats(factory.searcher.ranker.index)[0] if idf_map is None else idf_map
     embS = factory.searcher.ranker.embeddings_strided
     default_idf = compute_default_idf(N_global, eps, add_one)
 
@@ -501,11 +506,11 @@ from collections import defaultdict
 from typing import Dict, Tuple
 import torch
 from tqdm import tqdm
-
-
+from pyterrier_colbert.ranking import ColBERTv2Index
+import json
 
 # @torch.no_grad()
-def build_global_code_stats(factory,
+def build_global_code_stats(index : ColBERTv2Index,
                             batch_size: int = 1024,
                             eps: float = 1.0,
                             add_one: bool = True
@@ -520,8 +525,20 @@ def build_global_code_stats(factory,
     Rely only on `embeddings_strided.lookup_codes(pids)` and `lens`.
     """
 
+    STATS_FILES = ["stats.json", "idf_map.json", "df_map.json", "cf_map.json"]
+    exists_ok = True
+    for fname in STATS_FILES:
+        if not (index.path / fname).exists():
+            exists_ok = False
+    if exists_ok:
+        _read_json = lambda path: json.load(open(path, "r", encoding="utf-8") )
+        idf_map = _read_json(index.path / "idf_map.json")
+        df_map  = _read_json(index.path / "df_map.json")
+        cf_map  = _read_json(index.path / "cf_map.json")
+        stats   = _read_json(index.path / "stats.json")
+        return idf_map, df_map, cf_map, stats
     
-    embS = factory.searcher.ranker.embeddings_strided           # ResidualEmbeddingsStrided
+    embS = index.searcher.ranker.embeddings_strided           # ResidualEmbeddingsStrided
     strided = embS.codes_strided                                # 内部 StridedTensor（有 lengths）
     
     N_docs = strided.lengths.numel() if hasattr(strided.lengths, "numel") else len(strided.lengths)
@@ -589,7 +606,16 @@ def build_global_code_stats(factory,
         "add_one": add_one,
         "num_codes": len(idf_map),
     }
-    return idf_map, dict(df_map), dict(cf_map), stats
+    df_map = dict(df_map)
+    cf_map = dict(cf_map)
+
+    _write_json = lambda path, data: json.dump(data, open(path, "w", encoding="utf-8"))
+    _write_json(index.path / "idf_map.json", idf_map)
+    _write_json(index.path / "df_map.json", dict(df_map))
+    _write_json(index.path / "cf_map.json", dict(cf_map))
+    _write_json(index.path / "stats.json", stats)
+
+    return idf_map, df_map, cf_map, stats
 
 # ---------- IDF ----------
 def compute_default_idf(N_global: int, eps: float = 1.0, add_one: bool = True) -> float:
