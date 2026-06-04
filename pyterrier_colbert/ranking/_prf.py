@@ -299,6 +299,7 @@ def build_global_code_stats(index,
         stats   = _read_json(index.path / "stats.json")
         return idf_map, df_map, cf_map, stats
     
+    print("Computing global code statistics from the index...")
     embS = index.searcher.ranker.embeddings_strided           # ResidualEmbeddingsStrided
     strided = embS.codes_strided                                # 内部 StridedTensor（有 lengths）
     
@@ -370,6 +371,7 @@ def build_global_code_stats(index,
     df_map = dict(df_map)
     cf_map = dict(cf_map)
 
+    print("Storing global code statistics in index for future reuse...")
     _write_json = lambda path, data: json.dump(data, open(path, "w", encoding="utf-8"))
     _write_json(index.path / "idf_map.json", idf_map)
     _write_json(index.path / "df_map.json", dict(df_map))
