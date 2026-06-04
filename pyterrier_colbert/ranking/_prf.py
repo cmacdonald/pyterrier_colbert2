@@ -1,6 +1,6 @@
 import math, torch
 import torch.nn.functional as F
-from typing import Optional, Iterable, List, Tuple
+from typing import Literal, Optional, Iterable, List, Tuple
 import pyterrier as pt
 import pandas as pd
 from collections import Counter, defaultdict
@@ -79,28 +79,30 @@ import pandas as pd, torch
 import torch.nn.functional as F
 import pyterrier as pt
 from colbert.modeling.tokenization import DocTokenizer
-from plaid_prf_tools import *
+
+
+def plaid_prf_end_to_end(factory, k=1000, **kwargs):
+    return plaid_prf(factory, **kwargs) >> factory.end_to_end(k=k, query_encoded=True)
 
 def plaid_prf(
-    factory, dataset,
+    factory, 
     *,
     # PRF & expansion:
-    top_psg=5, top_exp=16, beta=0.4, lambda_div=0.3,lambda_q=0.3,
+    top_psg=5, top_exp=16, beta=0.4, lambda_div=0.3,
+    lambda_q=0.3, # TODO can this be removed.
     dedup_same_wp: bool = True,
     mmr_selection: bool = True,
     output_exptok: bool = False,
-    # resources for weighting
-    weighting: str = "tf-idf",     # 'tf-idf' | 'rm1' | 'rm3' | 'bo1' | 'dfr_rsj'
-    cf_map=None,                   # for bo1 (if available)
-    total_tokens: int = None,      # for bo1
+    dataset = None,
+    # resources for  weighting
+    weighting: Literal['tf-idf', 'rm1', 'rm3', 'bo1', 'dfr_rsj'] = "tf-idf",
     rm3_lambda: float = 0.5,       # RM3 mixing coefficient
     temperature: float = 1.0,      # RM1 softmax temperature
-    df_map=None,                   # for dfr_rsj (if available)
-    N_docs: int = None,            # for dfr_rsj
-
 ):
-    idf_map, _, _, stats = build_global_code_stats(factory.searcher.ranker.index)
+    idf_map, df_map, cf_map, stats = build_global_code_stats(factory.searcher.ranker.index)
     N_global = stats['N']
+    N_docs = stats['N'] # TODO do we need both vars, this one is for dfr_rsj
+    total_tokens = stats['tokens']
     eps = stats['eps']
     add_one = stats['add_one']
     embS = factory.searcher.ranker.embeddings_strided
@@ -138,6 +140,7 @@ def plaid_prf(
 
         # 4) recover corresponding WP oneline，keep_mask is used to keep codes and wp ids aligned
         if output_exptok:
+            assert dataset is not None, "dataset is required for output_exptok to retrieve WP tokens"
             wpids_trim, keep_mask_cpu = build_wpids_and_keepmask_from_corpus(
                 factory, dataset, pids, lens, doc_tok
             )
@@ -156,10 +159,7 @@ def plaid_prf(
             wpids = wpids_trim                # [sum(K_i)]，与裁剪后的 V/codes 完全对齐
         else:
             wpids = None
-            
-        # print(f"codes after are: {codes}")
-            
-
+        
         # 5) Compute weights by the selected scheme (per-code)
         tf_map = tf_from_codes(codes)  # PRF counts per code
         
@@ -256,244 +256,6 @@ def plaid_prf(
     return pt.apply.by_query(_expand, add_ranks=False)
 
 
-def plaid_end_to_end_qe(factory, k=1000) -> pt.Transformer:
-    assert factory.plaid_mode == True, "plaid_end_to_end should only be used in PLAID mode"
-    def _search(df_query):
-        assert len(df_query) == 1
-        query_text = df_query.iloc[0]["query"]
-        qid = df_query.iloc[0]["qid"]
-        row = df_query.iloc[0]
-        # Encode the query
-        if 'query_vec' in df_query.columns:
-            query_vec = row.query_vec
-            # assert query_vec.shape[1]==42
-            if isinstance(query_vec, np.ndarray):
-                Q = torch.from_numpy(query_vec)
-            if torch.cuda.is_available():
-                Q = query_vec.to('cuda', non_blocking=True).to(dtype=torch.float16)
-        else:
-            Q = factory.searcher.encode([query_text]) # 1) Query encoding stage
-        assert Q.dim() == 3
-       
-        
-
-        # 2) PLAID candidate generation: returns pids and centroid_scores
-        # https://github.com/stanford-futuredata/ColBERT/blob/main/colbert/search/candidate_generation.py#L45
-        pids, centroid_scores = factory.searcher.ranker.generate_candidates(
-            factory.searcher.config, Q
-        )
-        # PLAID centroid interaction, pruning and final scoring
-        # score_pids returns (scores, pids)
-        # https://github.com/stanford-futuredata/ColBERT/blob/main/colbert/search/index_storage.py#L111
-        scores, pids = factory.searcher.ranker.score_pids(
-            factory.searcher.config, Q, pids, centroid_scores
-        )
-               
-        # Extract the top-k results
-        topk = min(k, len(pids))
-        # 用 topk 不要对全量排序（更快）
-        top_scores, top_idx = torch.topk(scores, k=topk, largest=True)
-        
-        # 一次性搬到 CPU，避免循环里 .item() 反复同步
-        top_pids = pids[top_idx].detach().cpu().numpy()
-        top_scores = top_scores.detach().cpu().numpy()
-        results = []
-        for rank, (pid, score) in enumerate(zip(top_pids, top_scores), start=1):
-            docno = factory.docnos.fwd[int(pid)]
-            results.append([qid, docno, float(score), rank])
-
-
-        # top_indices = scores.argsort(descending=True)[:topk]
-        # results = []
-        # for rank, idx in enumerate(top_indices):
-        #     pid = pids[idx].item()
-        #     docno = factory.docnos.fwd[pid]
-        #     # docno = self.docno_mapping.get(pid, "unknown_docno")
-        #     score = scores[idx].item()
-        #     results.append([qid, docno, score, rank + 1])
-
-        return pd.DataFrame(results, columns=["qid", "docno", "score", "rank"])
-
-    return pt.apply.by_query(_search)
-
-
-
-
-
-import pandas as pd, torch
-import torch.nn.functional as F
-import pyterrier as pt
-from colbert.modeling.tokenization import DocTokenizer
-# from plaid_qe import *
-
-def plaid_prf(
-    factory, dataset, N_global, eps=1.0, add_one=True,
-    *,
-    # PRF & expansion:
-    top_psg=5, top_exp=16, beta=0.4, lambda_div=0.3,
-    dedup_same_wp: bool = True,
-    mmr_selection: bool = True,
-    output_exptok: bool = False,
-    # resources for weighting
-    weighting: str = "tf-idf",     # 'tf-idf' | 'rm1' | 'rm3' | 'bo1' | 'dfr_rsj'
-    cf_map=None,                   # for bo1 (if available)
-    total_tokens: int = None,      # for bo1
-    rm3_lambda: float = 0.5,       # RM3 mixing coefficient
-    temperature: float = 1.0,      # RM1 softmax temperature
-    df_map=None,                   # for dfr_rsj (if available)
-    N_docs: int = None,            # for dfr_rsj
-
-):
-    idf_map = build_global_code_stats(factory.searcher.ranker.index)[0] if idf_map is None else idf_map
-    embS = factory.searcher.ranker.embeddings_strided
-    default_idf = compute_default_idf(N_global, eps, add_one)
-
-    # tokenizer（used to map id->token wp）
-    cfg = (getattr(factory.searcher, "config", None)
-           or getattr(factory.searcher.ranker, "config", None)
-           or getattr(factory.searcher.ranker, "colbert_config", None))
-    doc_tok = DocTokenizer(config=cfg)  # .tok 是 HF tokenizer
-
-    @torch.no_grad()
-    def _expand(dfq):
-        qid, qtext = dfq.iloc[0]["qid"], dfq.iloc[0]["query"]
-
-        # 1) encode query
-        Q = factory.searcher.encode([qtext]).squeeze(0).to(torch.float32)
-        Q = F.normalize(Q, p=2, dim=-1)
-
-        # 2) PRF pids via dense PLAID
-        pids, ranks, scores = factory.searcher.dense_search(Q.unsqueeze(0), k=top_psg)
-        if not pids:
-            return pd.DataFrame([{"qid": qid, "query": qtext, "query_vec": Q.unsqueeze(0)}])
-        # caption scores for RM1
-        base_scores = torch.tensor(scores, dtype = torch.float32, device = 'cpu')
-
-        # 3) Gather PRF token vectors and compressed codes
-        V, lens = embS.lookup_pids(pids)                 # V: [sumL, d]
-        if V is None or V.numel() == 0:
-            return pd.DataFrame([{"qid": qid, "query": qtext, "query_vec": Q.unsqueeze(0)}])
-        V = F.normalize(V.to(torch.float32), p=2, dim=-1)
-        codes, _ = embS.lookup_codes(pids)               # [sumL]
-        assert int(codes.numel()) == int(V.size(0)) # make sure positionally algined codes and vec
-        # print(f"codes before are: {codes}")
-
-        # 4) recover corresponding WP oneline，keep_mask is used to keep codes and wp ids aligned
-        if output_exptok:
-            wpids_trim, keep_mask_cpu = build_wpids_and_keepmask_from_corpus(
-                factory, dataset, pids, lens, doc_tok
-            )
-            
-            
-            if keep_mask_cpu.sum().item() == 0:
-                return pd.DataFrame([{"qid": qid, "query": qtext, "query_vec": Q.unsqueeze(0)}])
-    
-            
-            # apply on token vectors first
-            if V.is_cuda:
-                V = V[keep_mask_cpu.to(V.device)]
-            else:
-                V = V[keep_mask_cpu]
-            codes = codes[keep_mask_cpu]          # CPU
-            wpids = wpids_trim                # [sum(K_i)]，与裁剪后的 V/codes 完全对齐
-        else:
-            wpids = None
-            
-        # print(f"codes after are: {codes}")
-            
-
-        # 5) Compute weights by the selected scheme (per-code)
-        tf_map = tf_from_codes(codes)  # PRF counts per code
-        
-
-        # 6) weighting methods
-        if weighting == "tf-idf":
-            assert idf_map is not None, "idf_map is required for tf-idf weighting"
-            weights_by_code = weights_tf_idf(tf_map, idf_map=idf_map, default_idf=default_idf)
-
-        elif weighting == "rm1":
-            # needs per-doc lens and base_scores
-            weights_by_code = weights_rm1_from_prf(
-                codes, lens, base_scores, temperature=temperature, normalize_out=True
-            )
-
-        elif weighting == "rm3":
-            assert idf_map is not None, "idf_map is required for the tf-idf part of RM3"
-            tfidf_w = weights_tf_idf(tf_map, idf_map=idf_map, default_idf=default_idf)
-            rm1_w   = weights_rm1_from_prf(
-                codes, lens, base_scores, temperature=temperature, normalize_out=True
-            )
-            weights_by_code = weights_rm3(tfidf_w, rm1_w, lam=rm3_lambda)
-
-        elif weighting == "bo1":
-            assert (cf_map is not None) and (total_tokens is not None), \
-                "bo1 weighting needs cf_map and total_tokens"
-            weights_by_code = weights_bo1(tf_map, cf_map=cf_map, total_tokens=total_tokens)
-
-        elif weighting == "dfr":
-            # simple DFR-style proxy (RSJ-IDF)
-            assert df_map is not None, "dfr_rsj weighting needs df_map (document frequencies)"
-            weights_by_code = weights_dfr_rsj(tf_map, df_map=df_map, N_docs=N_docs)
-
-        else:
-            raise ValueError(f"Unknown weighting: {weighting}")
-            
-        #  Dict to Tensor AND normalize
-        rel = rel_from_code(codes, code_rel =weights_by_code , device=V.device, normalize=True)
-
-        # 6） selection methods
-        if mmr_selection:
-
-            # MMR Diversity Selection(remove duplicated WP）
-            dedup_wp = wpids if (dedup_same_wp and (wpids is not None)) else None
-            selected = mmr_select(V, rel, top_k=top_exp, lambda_div=lambda_div, dedup_wpids=dedup_wp)
-            # print("mmr_sel:", type(selected), selected)
-            
-        else:
-            # only select top k from high to low. rel: torch.tensor
-            # print("default selection: {type(rel)}")
-            k = min(top_exp, len(rel))
-            rel, selected = torch.topk(rel,k=k)
-            # print("topk_sel:",type(selected), selected)
-            
-            
-        
-        if len(selected) == 0:
-            return pd.DataFrame([{"qid": qid, "query": qtext, "query_vec": Q.unsqueeze(0)}])
-            
-        sel_idx = torch.as_tensor(selected, dtype=torch.long, device=V.device)
-        E = beta * V[sel_idx]                                        # on DEV
-        Q_new = torch.cat([Q, E.to(Q.device, dtype=Q.dtype)], dim=0).unsqueeze(0)
-            
-        
-        # 7) Qualitative output
-        if wpids is not None:
-            exp_wpids  = [int(wpids[i].item()) for i in selected]
-            exp_wptoks = doc_tok.tok.convert_ids_to_tokens(exp_wpids)  #  WP（## & specials）
-        else:
-            exp_wpids, exp_wptoks = None, None
-
-        exp_codes = [int(codes[i].item()) for i in selected]
-        # for i in selected:
-        #     print(i, int(codes[i]))
-        
-        if output_exptok:
-            print(f"QUERY: {qtext} \n EXP_TOKS: {exp_wptoks} \n EXP_codes: {exp_codes}")
-
-        
-        return pd.DataFrame([{
-            "qid": qid,
-            "query": qtext,
-            "query_vec": Q_new,
-            "n_exp": int(E.size(0)),
-            "lambda_div": float(lambda_div),
-            "exp_idx": selected,          # 相对当前（过滤后的）候选数组的下标
-            "exp_wpids": exp_wpids,
-            "exp_wptoks": exp_wptoks,
-            "exp_codes": exp_codes
-        }])
-
-    return pt.apply.by_query(_expand, add_ranks=False)
 
 
 
@@ -506,11 +268,10 @@ from collections import defaultdict
 from typing import Dict, Tuple
 import torch
 from tqdm import tqdm
-from pyterrier_colbert.ranking import ColBERTv2Index
 import json
 
 # @torch.no_grad()
-def build_global_code_stats(index : ColBERTv2Index,
+def build_global_code_stats(index : 'ColBERTv2Index',
                             batch_size: int = 1024,
                             eps: float = 1.0,
                             add_one: bool = True

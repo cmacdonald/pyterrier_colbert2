@@ -14,6 +14,22 @@ import torch
 from colbert.search.index_storage import StridedTensor #for plaid stage search
 from colbert.modeling.colbert import colbert_score_reduce #for plaid stage search
 
+def suppress_amp_autocast_warning(func):
+    import warnings
+    from functools import wraps
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"`torch\.cuda\.amp\.autocast\(args\.\.\.\)` is deprecated",
+                category=FutureWarning,
+            )
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
 class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
     ARTIFACT_TYPE = 'dense_index'
@@ -21,7 +37,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
     ARTIFACT_PACKAGE_HINT = 'pyterrier_colbert2'
 
     def __init__(self, index_location : str, plaid_mode=False, colbert : Optional[str] = None,
-    ncells=None, centroid_score_threshold=None, ndocs=None, **kwargs):
+        ncells=None, centroid_score_threshold=None, ndocs=None, **kwargs):
         
         with open(os.path.join(index_location,'pt_meta.json'), 'rt') as f_meta:
             meta = json.load(f_meta)
@@ -39,7 +55,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         self.ndocs = ndocs
         dirs = os.path.split(index_location)
         self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
-        if self.plaid_mode == True:
+        if self.plaid_mode:
             self.searcher.configure(ncells=self.ncells,
                                 centroid_score_threshold=self.centroid_score_threshold,
                                 ndocs=self.ndocs)
@@ -51,63 +67,91 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
     def __len__(self):
         return len(self.docnos)
+    
+    #from . import prf
+    #plaid_prf_end_to_end = prf.plaid_prf_end_to_end
 
     """
     End-to-end retrieval wrapper using dense_search. 
     in particular, searcher.dense_search maybe with different configs for colbertv2 and plaid.
     """
-    def end_to_end(self, k=1000, decompose=False) -> pt.Transformer: 
+    def end_to_end(self, k=1000, decompose=False, query_encoded=False) -> pt.Transformer: 
+
+        @suppress_amp_autocast_warning
+        def _search_query_encoded(df_query):
+            pt.validate.query_frame(df_query, extra_columns=["query_vec"])
+            if len(df_query) == 0:
+                return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
+            
+            assert len(df_query) == 1
+            # encode Q
+            Q = torch.tensor(df_query.iloc[0]["query_vec"])
+            if torch.cuda.is_available():
+                Q = Q.cuda()
+
+            # call colbert.Searcher or plaid if plaid_mode is True
+            docids, ranks, scores = self.searcher.dense_search(Q, k=k)
+            docnos = self.docnos.fwd[docids]
+
+            # ignore the ranks returned by the searcher and re-assign them based on the sorted order of scores, 
+            # to ensure consistency between colbertv2 and plaid modes. This is because in plaid mode, the searcher 
+            # may return fewer than k results due to pruning; also ensures they start at pt.model.FIRST_RANK
+            ranks = ranks[0:len(scores)]
+            ranks = [pt.model.FIRST_RANK + i for i in range(len(ranks))]
+            return pd.DataFrame({
+                "qid": [df_query.iloc[0]["qid"]] * len(docnos),
+                "query": [df_query.iloc[0]["query"]] * len(docnos),
+                "docno": docnos,
+                "score": scores,
+                "rank": ranks
+            })
+
+        @suppress_amp_autocast_warning
         def _search(df_query):
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore",
-                    message=r"`torch\.cuda\.amp\.autocast\(args\.\.\.\)` is deprecated",
-                    category=FutureWarning,
-                )
-                pt.validate.query_frame(df_query, extra_columns=["query"])
-                if len(df_query) == 0:
-                    return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
-                
-                # TODO can we make df_queries into a colbert.Queries object to allow parallelisation?
-                assert len(df_query) == 1
-                # encode Q
-                Q = self.searcher.encode([df_query.iloc[0]["query"]])
+            pt.validate.query_frame(df_query, extra_columns=["query"])
+            if len(df_query) == 0:
+                return pd.DataFrame(columns=["qid", "query", "docno", "score", "rank"])
+            
+            # TODO can we make df_queries into a colbert.Queries object to allow parallelisation?
+            assert len(df_query) == 1
+            # encode Q
+            Q = self.searcher.encode([df_query.iloc[0]["query"]])
 
-                # call colbert.Searcher or plaid if plaid_mode is True
-                docids, ranks, scores = self.searcher.dense_search(Q, k=k)
-                docnos = self.docnos.fwd[docids]
+            # call colbert.Searcher or plaid if plaid_mode is True
+            docids, ranks, scores = self.searcher.dense_search(Q, k=k)
+            docnos = self.docnos.fwd[docids]
 
-                # ignore the ranks returned by the searcher and re-assign them based on the sorted order of scores, 
-                # to ensure consistency between colbertv2 and plaid modes. This is because in plaid mode, the searcher 
-                # may return fewer than k results due to pruning; also ensures they start at pt.model.FIRST_RANK
-                ranks = ranks[0:len(scores)]
-                ranks = [pt.model.FIRST_RANK + i for i in range(len(ranks))]
-                return pd.DataFrame({
-                    "qid": [df_query.iloc[0]["qid"]] * len(docnos),
-                    "query": [df_query.iloc[0]["query"]] * len(docnos),
-                    "docno": docnos,
-                    "score": scores,
-                    "rank": ranks
-                })
+            # ignore the ranks returned by the searcher and re-assign them based on the sorted order of scores, 
+            # to ensure consistency between colbertv2 and plaid modes. This is because in plaid mode, the searcher 
+            # may return fewer than k results due to pruning; also ensures they start at pt.model.FIRST_RANK
+            ranks = ranks[0:len(scores)]
+            ranks = [pt.model.FIRST_RANK + i for i in range(len(ranks))]
+            return pd.DataFrame({
+                "qid": [df_query.iloc[0]["qid"]] * len(docnos),
+                "query": [df_query.iloc[0]["query"]] * len(docnos),
+                "docno": docnos,
+                "score": scores,
+                "rank": ranks
+            })
 
         if decompose:
             assert self.plaid_mode == True, "Decomposed search is only supported in PLAID mode"
+            assert not query_encoded, "Decomposed search is not compatible with pre-encoded queries"
             return self.plaid_candidate_generation() >> self.plaid_centroid_interaction() >> self.plaid_centroid_pruning() >> self.plaid_final_scoring(k=k)
-        return pt.apply.by_query(_search, add_ranks=False, label="PLAID" if self.plaid_mode else "ColBERTv2")
+        return pt.apply.by_query(_search_query_encoded if query_encoded else _search, add_ranks=False, label="PLAID" if self.plaid_mode else "ColBERTv2")
 
     """
     More specifically, a PLAID retrieval wrapper using candidate generation
     and centroid interaction and pruning stages.
     Requires an index built with ivf.pid.pt (optimised inverted file).
     """
-
     def plaid_candidate_generation(self) -> pt.Transformer:
         """
         Stage 1: Generate candidates.  For each query, return a single row with
         the encoded query, the list of pids and the centroid_scores.
         Output columns: qid, query, Q, pids, centroid_scores
         """
-        assert self.plaid_mode == True
+        assert self.plaid_mode
         def _generate(df_query):
             pt.validate.query_frame(df_query, extra_columns=["query"])
             if len(df_query) == 0:
@@ -135,7 +179,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         Takes the output of candidate_generation and expands it into one row per candidate.
         Output columns: qid, query, pid, docno, approx_score
         """
-        assert self.plaid_mode == True
+        assert self.plaid_mode
         def _interact(df):
             pt.validate.query_frame(df, extra_columns=["query", "pids", "score"])
             if len(df) == 0:
@@ -170,7 +214,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         Input columns: qid, query, pid, docno, approx_score
         Output columns: qid, query, pid, docno
         """
-        assert self.plaid_mode == True
+        assert self.plaid_mode
 
         ndocs = self.searcher.config.ndocs
         def _prune(df):
@@ -190,7 +234,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         Input columns: qid, query, pid, docno
         Output columns: qid, docno, score, rank
         """
-        assert self.plaid_mode == True
+        assert self.plaid_mode
         def _score(df):
             pt.validate.result_frame(df, extra_columns=["query", "pid"])
             if len(df) == 0:
@@ -219,3 +263,4 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                     })
             return pd.DataFrame(results, columns=["qid", "docno", "score", "rank"])
         return pt.apply.by_query(_score, label="plaid_final_scoring")
+
