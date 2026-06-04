@@ -114,7 +114,9 @@ def plaid_prf(
            or getattr(factory.searcher.ranker, "colbert_config", None))
     doc_tok = DocTokenizer(config=cfg)  # .tok 是 HF tokenizer
 
-    @torch.no_grad()
+    from ._index import suppress_amp_autocast_warning
+    @torch.no_grad() 
+    @suppress_amp_autocast_warning
     def _expand(dfq):
         pt.validate.query_frame(dfq, extra_columns=["query"])
         if len(dfq) == 0:
@@ -214,12 +216,8 @@ def plaid_prf(
             
         else:
             # only select top k from high to low. rel: torch.tensor
-            # print("default selection: {type(rel)}")
             k = min(top_exp, len(rel))
             rel, selected = torch.topk(rel,k=k)
-            # print("topk_sel:",type(selected), selected)
-            
-            
         
         if len(selected) == 0:
             return pd.DataFrame([{"qid": qid, "query": qtext, "query_vec": Q.unsqueeze(0)}])
