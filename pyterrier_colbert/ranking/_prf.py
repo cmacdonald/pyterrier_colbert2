@@ -1,14 +1,17 @@
 import math, torch
 import torch.nn.functional as F
-from typing import Literal, Optional, Iterable, List, Tuple
+from typing import Literal, Optional, List, Tuple
 import pyterrier as pt
 import pandas as pd
 from collections import Counter, defaultdict
-import numpy as np
-
+from pyterrier_colbert.utils import suppress_amp_autocast_warning
 import math
 from typing import List, Optional
 import torch
+import pandas as pd, torch
+import torch.nn.functional as F
+import pyterrier as pt
+from colbert.modeling.tokenization import DocTokenizer
 
 def mmr_select_unified(
     V: torch.Tensor,                 # [M, d] PRF token vectors (L2-normalised, same device)
@@ -75,10 +78,7 @@ def mmr_select_unified(
 
     return selected
 
-import pandas as pd, torch
-import torch.nn.functional as F
-import pyterrier as pt
-from colbert.modeling.tokenization import DocTokenizer
+
 
 
 def plaid_prf_end_to_end(factory, k=1000, **kwargs):
@@ -114,7 +114,7 @@ def plaid_prf(
            or getattr(factory.searcher.ranker, "colbert_config", None))
     doc_tok = DocTokenizer(config=cfg)  # .tok 是 HF tokenizer
 
-    from ._index import suppress_amp_autocast_warning
+    
     @torch.no_grad() 
     @suppress_amp_autocast_warning
     def _expand(dfq):

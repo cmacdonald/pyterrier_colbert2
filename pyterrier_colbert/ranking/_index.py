@@ -1,33 +1,19 @@
 import warnings # to remove the autocast warning
 
 from . import ColBERTModelOnlyFactory
+from ..utils import suppress_amp_autocast_warning
 
 import pandas as pd
 import pyterrier as pt
 import os
 from typing import Optional
 import json
-from pyterrier import tqdm
 from colbert.searcher import Searcher
 from warnings import warn
 import torch
 from colbert.search.index_storage import StridedTensor #for plaid stage search
 from colbert.modeling.colbert import colbert_score_reduce #for plaid stage search
 
-def suppress_amp_autocast_warning(func):
-    import warnings
-    from functools import wraps
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message=r"`torch\.cuda\.amp\.autocast\(args\.\.\.\)` is deprecated",
-                category=FutureWarning,
-            )
-            return func(*args, **kwargs)
-
-    return wrapper
 
 
 class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
@@ -67,9 +53,6 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
     def __len__(self):
         return len(self.docnos)
-    
-    #from . import prf
-    #plaid_prf_end_to_end = prf.plaid_prf_end_to_end
 
     """
     End-to-end retrieval wrapper using dense_search. 
