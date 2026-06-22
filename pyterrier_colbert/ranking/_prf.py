@@ -88,8 +88,9 @@ def plaid_prf(
     factory, 
     *,
     # PRF & expansion:
-    top_psg=5, top_exp=16, beta=0.4, lambda_div=0.3,
-    lambda_q=0.3, # TODO can this be removed.
+    top_psg=5, top_exp=16, 
+    beta=0.7, 
+    lambda_div=0.3,
     dedup_same_wp: bool = True,
     mmr_selection: bool = True,
     output_exptok: bool = False,
