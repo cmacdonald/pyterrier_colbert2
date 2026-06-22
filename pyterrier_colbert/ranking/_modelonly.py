@@ -51,7 +51,7 @@ class ColBERTModelOnlyFactory():
             colbert_config = ColBERTConfig.load_from_checkpoint(colbert_model)
             args.colbert = Checkpoint(name=args.checkpoint, colbert_config=colbert_config)
         else:
-            assert isinstance(colbert_model, tuple)
+            assert isinstance(colbert_model, tuple), f"colbert_model must be either a string (path to checkpoint) or a tuple of (ColBERT, dict), found {type(colbert_model)}"
             args.colbert, args.checkpoint = colbert_model
             assert isinstance(args.colbert, ColBERT)
             assert isinstance(args.checkpoint, dict)
