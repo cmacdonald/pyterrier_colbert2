@@ -168,8 +168,9 @@ If you use this code, please cite the relevant papers:
 
 
 ## Credits
-
- - Xiao Wang, University of Glasgow
+ 
+ - Xiao Wang, University of International Business and Economics
+ - Jianhua Dong, University of Glasgow
  - Craig Macdonald, University of Glasgow
  - Sean MacAvaney, University of Glasgow
 
