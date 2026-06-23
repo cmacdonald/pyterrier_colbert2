@@ -5,18 +5,12 @@ import pyterrier as pt
 
 from pyterrier import tqdm
 from typing import Union, Tuple
-# from colbert.evaluation.load_model import load_model
-# from .. import load_checkpoint
-# # monkeypatch to use our downloading version
-# import colbert.evaluation.loaders
-# colbert.evaluation.loaders.load_checkpoint = load_checkpoint
-# colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
 from colbert.modeling.checkpoint import Checkpoint  # modified from colbert.inference import Checkpoint
 from colbert.modeling.colbert import ColBERT  # add a new method to use BaseColBERT
 from colbert.modeling.colbert import colbert_score #add a new score method
 from colbert.modeling.tokenization import QueryTokenizer, DocTokenizer # to build query/doc from text manually
 from colbert.infra import ColBERTConfig  # add ColBERTConfig
-
+from ..utils import suppress_amp_autocast_warning
 from warnings import warn
 
 
@@ -49,9 +43,9 @@ class ColBERTModelOnlyFactory():
         if isinstance(colbert_model, str):
             args.checkpoint = colbert_model
             colbert_config = ColBERTConfig.load_from_checkpoint(colbert_model)
-            args.colbert = Checkpoint(name=args.checkpoint, colbert_config=colbert_config)
+            args.colbert = Checkpoint(name=args.checkpoint, colbert_config=colbert_config, verbose=0)
         else:
-            assert isinstance(colbert_model, tuple)
+            assert isinstance(colbert_model, tuple), f"colbert_model must be either a string (path to checkpoint) or a tuple of (ColBERT, dict), found {type(colbert_model)}"
             args.colbert, args.checkpoint = colbert_model
             assert isinstance(args.colbert, ColBERT)
             assert isinstance(args.checkpoint, dict)
@@ -69,8 +63,11 @@ class ColBERTModelOnlyFactory():
                 return pd.Series([Q[0]])
             
         def row_apply(df):
-            if "docno" in df.columns or "docid" in df.columns:
-                warn("You are query encoding an R dataframe, the query will be encoded for each row")
+            with pt.validate.any(df) as v:
+                v.result_frame(extra_columns=["query"])
+                v.query_frame(extra_columns=["query"])
+            if len(df) == 0:
+                return pd.DataFrame(columns=df.columns + ["query_embs"])
             df["query_embs"] = df.apply(_encode_query, axis=1)
             return df
         
@@ -80,26 +77,32 @@ class ColBERTModelOnlyFactory():
         """
         Returns a transformer that can encode the text using ColBERT's model.
         input: qid, text
-        output: qid, text, doc_embs, doc_toks,
+        output: qid, text, doc_embs
         """
         def chunker(seq, size):
             for pos in range(0, len(seq), size):
                 yield seq.iloc[pos:pos + size]
         def df_apply(df):
+            with pt.validate.any(df) as v:
+                v.result_frame(extra_columns=["text"])
+                v.document_frame(extra_columns=["text"])
+            if len(df) == 0:
+                return pd.DataFrame(columns=set(["docno", "text", "doc_embs"]) | set(df.columns))
             with torch.no_grad():
                 rtr_embs = []
                 rtr_toks = []
                 for chunk in chunker(df, batch_size):
-                    embsD, idsD = self.args.inference.docFromText(chunk.text.tolist(), with_ids=True)
+                    embsD = self.args.inference.docFromText(chunk.text.tolist())
                     if detach:
                         embsD = embsD.cpu()
                     rtr_embs.extend([embsD[i, : ,: ] for i in range(embsD.shape[0])])
-                    rtr_toks.extend(idsD)
+                    #rtr_toks.extend(idsD)
             df["doc_embs"] = pd.Series(rtr_embs)
-            df["doc_toks"] = pd.Series(rtr_toks)
+            #df["doc_toks"] = pd.Series(rtr_toks)
             return df
         return pt.apply.generic(df_apply)
 
+    @suppress_amp_autocast_warning
     def explain_text(self, query : str, document : str):
         """
         Provides a diagram explaining the interaction between a query and the text of a document
@@ -195,8 +198,7 @@ class ColBERTModelOnlyFactory():
             Q = torch.unsqueeze(qembs, 0)
             if gpu:
                 Q = Q.cuda()
-            Q = Q.half()  # Converts the query embed to the float16 type
-
+            
             D_tuple = inference.docFromText(passages, bsize=args.bsize, keep_dims=True, to_cpu=not gpu)
 
             # Unlock the returned tuple to get the actual document embed
@@ -204,13 +206,8 @@ class ColBERTModelOnlyFactory():
             if gpu:
                 D = D.cuda()
 
-            try:
-                scores = (Q @ D.permute(0, 2, 1)).max(2).values.sum(1)
-                print(f"Scores: {scores}")
-            except Exception as e:
-                print(f"Error calculating scores: {e}")
-                return []
-
+            print(f"Dtypes - Q: {Q.dtype}, D: {D.dtype}")
+            scores = (Q @ D.permute(0, 2, 1)).max(2).values.sum(1)
             scores = scores.sort(descending=True)
             ranked = scores.indices.tolist()
             ranked_scores = scores.values.tolist()
@@ -219,6 +216,7 @@ class ColBERTModelOnlyFactory():
             return list(zip(ranked_scores, ranked_pids, ranked_passages))
 
         def _text_scorer(queries_and_docs):
+            pt.validate.result_frame(queries_and_docs, extra_columns=["query", doc_attr])
             groupby = queries_and_docs.groupby("qid")
             rtr = []
             with torch.no_grad():
@@ -230,6 +228,7 @@ class ColBERTModelOnlyFactory():
             return pd.DataFrame(rtr, columns=["qid", "query", "docno", "score", "rank"])
 
         def _text_scorer_qembs(queries_and_docs):
+            pt.validate.result_frame(queries_and_docs, extra_columns=["query_embs", "query", doc_attr])
             groupby = queries_and_docs.groupby("qid")
             rtr = []
             with torch.no_grad():
@@ -252,7 +251,6 @@ class ColBERTModelOnlyFactory():
         """
         import torch
         import pyterrier as pt
-        assert pt.started(), 'PyTerrier must be started'
         cuda0 = torch.device('cuda') if gpu else torch.device('cpu')
 
         def _build_interaction(row, D):
@@ -266,6 +264,14 @@ class ColBERTModelOnlyFactory():
             idsD[row.row_index, 0:doc_len] = doc_toks
         
         def _score_query(df):
+            pt.validate.result_frame(df, extra_columns=["query", "query_embs", "doc_embs"])
+            if len(df) == 0:
+                columns = set(df.columns) | set(["query", "query_embs", "doc_embs", "score"])
+                if add_contributions:
+                    columns.add("contributions")
+                if add_exact_match_contribution:
+                    columns.update(["exact_numer", "exact_denom", "exact_pct"])
+                return pd.DataFrame(columns=list(columns))
             with torch.no_grad():
                 weightsQ = None
                 Q = torch.cat([df.iloc[0].query_embs])

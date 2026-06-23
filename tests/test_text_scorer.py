@@ -16,7 +16,7 @@ class TestTextScoring(unittest.TestCase):
     # def test_prf_text(self):
     #     from pyterrier_colbert.ranking import ColbertPRF
 
-    #     basescorer = self.factory.text_scorer()
+    #     basescorer = self.ffactory.text_scorer()
     #     basertr = basescorer.transform(self.df).sort_values('docno')
 
     #     # monkey patch in an FNT from another index 
@@ -39,7 +39,7 @@ class TestTextScoring(unittest.TestCase):
         enc = self.factory.text_encoder()
         rtr1 = enc.transform(self.df)
         self.assertTrue("doc_embs" in rtr1.columns)
-        self.assertTrue("doc_toks" in rtr1.columns)
+        #self.assertTrue("doc_toks" in rtr1.columns)
         t1 = rtr1.iloc[0].doc_embs
         self.assertEqual(128, t1.shape[1])
         t2 = rtr1.iloc[1].doc_embs
@@ -63,7 +63,6 @@ class TestTextScoring(unittest.TestCase):
         qend = self.factory.query_encoder()
         rtr = qend(queries)
         self.assertTrue("query_embs" in rtr.columns)
-        self.assertTrue("query_toks" in rtr.columns)
 
     def test_text_scorer_with_qembs(self):
         scorer = self.factory.text_scorer()
@@ -71,4 +70,6 @@ class TestTextScoring(unittest.TestCase):
         rtr = scorer.transform(self.df)  
         qe_rtr = qe_scorer.search(self.df["query"])
         self.assertTrue("score" in rtr.columns)
+        print(rtr)
+        print(qe_rtr)
         pd.testing.assert_frame_equal(rtr, qe_rtr)

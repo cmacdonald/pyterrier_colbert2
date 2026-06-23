@@ -1,4 +1,6 @@
-python-terrier>=0.13.1
+pyterrier>=1.0.0
 pandas
 git+https://github.com/stanford-futuredata/ColBERT.git#egg=colbert-ai
 scikit-learn
+npids
+transformers<5.0.0

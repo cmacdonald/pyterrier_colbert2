@@ -1,3 +1,5 @@
+import json
+
 import pyterrier as pt
 import os
 from warnings import warn
@@ -21,7 +23,7 @@ class Object(object):
 
 class ColbertV2Indexer(pt.Indexer):
 
-    def __init__(self, index_location, checkpoint, index_name, nbits=2):
+    def __init__(self, index_location : str, checkpoint : str, index_name : str, nbits : int = 2):
         self.index_location = index_location
         self.checkpoint = checkpoint
         self.index_name = index_name
@@ -61,9 +63,17 @@ class ColbertV2Indexer(pt.Indexer):
         print("#> V2 recording docnos")
         from npids import Lookup
         Lookup.build(docnos, docnos_file)
-        
+
+        with open(os.path.join(full_index_path, 'pt_meta.json'), 'wt') as f_meta:
+            from pyterrier_colbert.ranking import ColBERTv2Index
+            json.dump({
+                "type": ColBERTv2Index.ARTIFACT_TYPE,
+                "format": ColBERTv2Index.ARTIFACT_FORMAT,
+                "model_checkpoint": self.checkpoint,
+                "nbits": self.nbits,
+            }, f_meta)
 
         print("#> done")
         import pyterrier_colbert.ranking
-        ranker = pyterrier_colbert.ranking.ColBERTv2Index(self.checkpoint, full_index_path)
+        ranker = pyterrier_colbert.ranking.ColBERTv2Index(full_index_path, colbert=self.checkpoint)
         return ranker
