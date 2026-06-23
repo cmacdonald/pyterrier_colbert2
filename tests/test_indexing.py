@@ -7,7 +7,7 @@ import tempfile
 CHECKPOINT="colbert-ir/colbertv2.0"
 class TestIndexing(unittest.TestCase):
 
-    def _indexing_1doc(self, indexmgr, model):
+    def _indexing_1doc(self, model):
         #minimum test case size is 100 docs, 40 Wordpiece tokens, and nx > k. we found 200 worked
         import pyterrier as pt
         from pyterrier_colbert.indexing import ColbertV2Indexer
@@ -20,6 +20,10 @@ class TestIndexing(unittest.TestCase):
 
         iter = pt.get_dataset("vaswani").get_corpus_iter()
         factory = indexer.index([ next(iter) for i in range(200) ])
+
+        # check the checkpoint metadata doesnt dissapear.
+        self.assertIn("model_checkpoint", factory._meta)
+        self.assertEqual(model, factory._meta["model_checkpoint"])
 
         #import pyterrier_colbert.pruning as pruning
         #from pyterrier_colbert.ranking import ColbertPRF
@@ -101,7 +105,7 @@ class TestIndexing(unittest.TestCase):
         indexer.index([ next(iter) for i in range(200) ] +  [{"docno": "a", "text": ""}])
     
     def test_indexing_1doc_torch(self):
-        self._indexing_1doc('torch', CHECKPOINT)
+        self._indexing_1doc(CHECKPOINT)
 
     # def test_indexing_1doc_torch_minilm(self):
     #     import transformers
