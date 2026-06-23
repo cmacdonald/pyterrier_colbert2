@@ -132,7 +132,7 @@ def plaid_prf(
         pids, ranks, scores = factory.searcher.dense_search(Q.unsqueeze(0), k=top_psg)
         if not pids:
             return pd.DataFrame([{"qid": qid, "query": qtext, "query_vec": Q.unsqueeze(0)}])
-        # caption scores for RM1
+        # capture scores for RM1
         base_scores = torch.tensor(scores, dtype = torch.float32, device = 'cpu')
 
         # 3) Gather PRF token vectors and compressed codes
