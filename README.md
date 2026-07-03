@@ -2,7 +2,7 @@
 
 [PyTerrier](https://github.com/terrier-org/pyterrier) bindings for [ColBERT v2](https://github.com/stanford-futuredata/ColBERT/) dense retrieval, with support for [PLAID](https://arxiv.org/abs/2205.09707) retrieval and [PLAID-PRF](https://eprints.gla.ac.uk/383294/) pseudo-relevance feedback.
 
-This is a successor to the original [PyTerrier ColBERT repository](https://github.com/terrierteam/pyterrier_colbert2).
+This is a successor to the original [PyTerrier ColBERT repository](https://github.com/terrierteam/pyterrier_colbert).
 
 ## Installation
 

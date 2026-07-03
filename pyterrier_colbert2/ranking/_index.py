@@ -20,7 +20,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
 
     ARTIFACT_TYPE = 'dense_index'
     ARTIFACT_FORMAT = 'colbert'
-    ARTIFACT_PACKAGE_HINT = 'pyterrier_colbert22'
+    ARTIFACT_PACKAGE_HINT = 'pyterrier_colbert2'
 
     def __init__(self, index_location : str, plaid_mode=False, colbert : Optional[str] = None,
         ncells=None, centroid_score_threshold=None, ndocs=None, **kwargs):
