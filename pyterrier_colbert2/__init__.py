@@ -1,8 +1,4 @@
 
-#import importlib
-#ranking = importlib.import_module('.' + 'indexing', package='pyterrier_colbert2') 
-#ranking = importlib.import_module('.' + 'ranking', package='pyterrier_colbert2')
-
 from . import ranking
 from . import indexing
 
