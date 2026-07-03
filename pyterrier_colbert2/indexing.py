@@ -65,7 +65,7 @@ class ColbertV2Indexer(pt.Indexer):
         Lookup.build(docnos, docnos_file)
 
         with open(os.path.join(full_index_path, 'pt_meta.json'), 'wt') as f_meta:
-            from pyterrier_colbert.ranking import ColBERTv2Index
+            from pyterrier_colbert2.ranking import ColBERTv2Index
             json.dump({
                 "type": ColBERTv2Index.ARTIFACT_TYPE,
                 "format": ColBERTv2Index.ARTIFACT_FORMAT,
@@ -74,6 +74,6 @@ class ColbertV2Indexer(pt.Indexer):
             }, f_meta)
 
         print("#> done")
-        import pyterrier_colbert.ranking
-        ranker = pyterrier_colbert.ranking.ColBERTv2Index(full_index_path, colbert=self.checkpoint)
+        import pyterrier_colbert2.ranking
+        ranker = pyterrier_colbert2.ranking.ColBERTv2Index(full_index_path, colbert=self.checkpoint)
         return ranker

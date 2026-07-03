@@ -4,7 +4,7 @@ from typing import Literal, Optional, List, Tuple
 import pyterrier as pt
 import pandas as pd
 from collections import Counter, defaultdict
-from pyterrier_colbert.utils import suppress_amp_autocast_warning
+from pyterrier_colbert2.utils import suppress_amp_autocast_warning
 import math
 from typing import List, Optional
 import torch

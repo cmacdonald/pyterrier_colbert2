@@ -7,20 +7,20 @@ class TestTextScoring(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
         checkpoint="colbert-ir/colbertv2.0"
-        from pyterrier_colbert.ranking import ColBERTModelOnlyFactory
+        from pyterrier_colbert2.ranking import ColBERTModelOnlyFactory
         self.factory = ColBERTModelOnlyFactory(checkpoint, gpu=False)
         self.df = pt.new.ranked_documents([[1, 2]])
         self.df["text"] = [ "professor proton mixed the chemicals", "chemical brothers played that tune"]
         self.df["query"] = ["chemical reactions", "chemical reactions"]
 
     # def test_prf_text(self):
-    #     from pyterrier_colbert.ranking import ColbertPRF
+    #     from pyterrier_colbert2.ranking import ColbertPRF
 
     #     basescorer = self.ffactory.text_scorer()
     #     basertr = basescorer.transform(self.df).sort_values('docno')
 
     #     # monkey patch in an FNT from another index 
-    #     from pyterrier_colbert.ranking import ColBERTFactory
+    #     from pyterrier_colbert2.ranking import ColBERTFactory
     #     basefactory = ColBERTFactory.from_dataset('vaswani', 'colbert_uog44k', gpu=False)
     #     self.factory.nn_term = basefactory.nn_term
     #     pipe = (

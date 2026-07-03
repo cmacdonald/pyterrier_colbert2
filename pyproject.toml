@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyterrier-colbert"
+name = "pyterrier-colbert2"
 version = "2.0.0"
 description = "PyTerrier components for ColBERT"
 readme = { file = "README.md", content-type = "text/markdown" }
@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.entry-points."pyterrier.artifact"]
-"dense_index.colbert" = "pyterrier_colbert.ranking:ColBERTv2Index"
+"dense_index.colbert" = "pyterrier_colbert2.ranking:ColBERTv2Index"
 
 [tool.setuptools.packages.find]
 where = ["."]
