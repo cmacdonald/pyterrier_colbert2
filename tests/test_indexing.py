@@ -10,7 +10,7 @@ class TestIndexing(unittest.TestCase):
     def _indexing_1doc(self, model):
         #minimum test case size is 100 docs, 40 Wordpiece tokens, and nx > k. we found 200 worked
         import pyterrier as pt
-        from pyterrier_colbert.indexing import ColbertV2Indexer
+        from pyterrier_colbert2.indexing import ColbertV2Indexer
         import os
         indexer = ColbertV2Indexer(
             self.test_dir,
@@ -25,8 +25,8 @@ class TestIndexing(unittest.TestCase):
         self.assertIn("model_checkpoint", factory._meta)
         self.assertEqual(model, factory._meta["model_checkpoint"])
 
-        #import pyterrier_colbert.pruning as pruning
-        #from pyterrier_colbert.ranking import ColbertPRF
+        #import pyterrier_colbert2.pruning as pruning
+        #from pyterrier_colbert2.ranking import ColbertPRF
             
         for factory in [factory]:
 
@@ -92,7 +92,7 @@ class TestIndexing(unittest.TestCase):
     def indexing_empty(self):
         #minimum test case size is 100 docs, 40 Wordpiece tokens, and nx > k. we found 200 worked
         import pyterrier as pt
-        from pyterrier_colbert.indexing import ColBERTIndexer
+        from pyterrier_colbert2.indexing import ColBERTIndexer
         checkpoint="http://www.dcs.gla.ac.uk/~craigm/colbert.dnn.zip"
         import os
         indexer = ColBERTIndexer(

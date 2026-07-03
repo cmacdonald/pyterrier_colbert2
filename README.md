@@ -17,7 +17,7 @@ The easiest way to get started is to use a pre-built index from HuggingFace. The
 
 ```python
 import pyterrier as pt
-import pyterrier_colbert
+import pyterrier_colbert2
 
 # Load a pre-built PLAID index from HuggingFace
 index = pt.Artifact.from_hf("pyterrier/msmarco_psg_v1.colbertv2", 
@@ -86,7 +86,7 @@ pt.Experiment(
 To build a ColBERT index from your own collection:
 
 ```python
-from pyterrier_colbert.indexing import ColbertV2Indexer
+from pyterrier_colbert2.indexing import ColbertV2Indexer
 import pyterrier as pt
 
 # Create an indexer with a ColBERT checkpoint
