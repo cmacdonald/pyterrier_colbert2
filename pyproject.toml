@@ -13,7 +13,7 @@ authors = [
 ]
 dependencies = [
   "npids",
-  "python-terrier>=0.13.1",
+  "pyterrier>=1.0.0",
   "pandas",
   "colbert-ai @ git+https://github.com/stanford-futuredata/ColBERT.git",
   "scikit-learn",
