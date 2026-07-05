@@ -1,4 +1,3 @@
-import warnings # to remove the autocast warning
 
 from . import ColBERTModelOnlyFactory
 from ..utils import suppress_amp_autocast_warning
@@ -9,7 +8,6 @@ import os
 from typing import Optional
 import json
 from colbert.searcher import Searcher
-from warnings import warn
 import torch
 from colbert.search.index_storage import StridedTensor #for plaid stage search
 from colbert.modeling.colbert import colbert_score_reduce #for plaid stage search
