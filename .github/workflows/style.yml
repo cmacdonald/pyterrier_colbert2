@@ -34,7 +34,7 @@ jobs:
     - name: Install Dependencies
       run: |
         pip install --upgrade -r requirements.txt
-        pip install -e .
+        pip install -e . ruff
 
     - name: Ruff
       run: 'ruff check --output-format=github pyterrier_dr'
