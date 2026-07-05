@@ -37,4 +37,4 @@ jobs:
         pip install -e . ruff
 
     - name: Ruff
-      run: 'ruff check --output-format=github pyterrier_dr'
+      run: 'ruff check --output-format=github pyterrier_colbert2'
