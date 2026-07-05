@@ -7,7 +7,6 @@ import pandas as pd
 from collections import Counter, defaultdict
 from pyterrier_colbert2.utils import suppress_amp_autocast_warning
 from colbert.modeling.tokenization import DocTokenizer
-from collections import defaultdict
 from tqdm import tqdm
 import json
 
@@ -384,7 +383,9 @@ def build_global_code_stats(index,
     cf_map = dict(cf_map)
 
     print("Storing global code statistics in index for future reuse...")
-    _write_json = lambda path, data: json.dump(data, open(path, "w", encoding="utf-8"))
+    def _write_json(path, data):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
     _write_json(index.path / "idf_map.json", idf_map)
     _write_json(index.path / "df_map.json", dict(df_map))
     _write_json(index.path / "cf_map.json", dict(cf_map))
@@ -436,9 +437,8 @@ def to_per_occurrence(weights_by_code: dict, codes_1d: torch.Tensor):
     # codes_1d: CPU Long [M]
     # 把 dict 转换为list
     out = []
-    get = weights_by_code.get
     for j, c in enumerate(codes_1d.tolist()):
-        out.append((float(get(c, 0.0)), j))
+        out.append((float(weights_by_code.get(c, 0.0)), j))
     return out
 
 
@@ -554,7 +554,8 @@ def  build_wpids_and_keepmask_from_corpus(
         try:
             df = dataset.get_corpus()
             row = df.loc[df['docno'] == docno]
-            if len(row) > 0: return row.iloc[0]['text']
+            if len(row) > 0: 
+                return row.iloc[0]['text']
         except Exception:
             pass
         for rec in dataset.get_corpus_iter():
@@ -583,7 +584,8 @@ def  build_wpids_and_keepmask_from_corpus(
         Ti = int(ids.size(1))
         Ki = min(Li, Ti)                           # align to min
         if Ki > 0:
-            s = int(offs[i]); e = s + Ki
+            s = int(offs[i])
+            e = s + Ki
             keep_mask[s:e] = True
             wp_chunks.append(ids[0, :Ki].to(torch.long).cpu())
 
