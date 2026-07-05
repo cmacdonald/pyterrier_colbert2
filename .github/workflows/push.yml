@@ -49,7 +49,7 @@ jobs:
       run: |
         conda install pip
         conda install mkl_fft -y
-        conda install conda install pytorch::pytorch
+        conda install pytorch::pytorch
         conda install -c pytorch -c conda-forge faiss-cpu
         #install this software
         pip install --timeout=120 .
