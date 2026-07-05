@@ -2,21 +2,9 @@ import json
 
 import pyterrier as pt
 import os
-from warnings import warn
-
-import torch
-import numpy as np
 
 from colbert.infra import Run, RunConfig, ColBERTConfig
 from colbert import Indexer
-#from colbert.evaluation.loaders import load_colbert
-# from . import load_checkpoint
-# # monkeypatch to use our downloading version
-# import colbert.evaluation.loaders
-# colbert.evaluation.loaders.load_checkpoint = load_checkpoint
-# colbert.evaluation.loaders.load_model.__globals__['load_checkpoint'] = load_checkpoint
-from colbert.utils.utils import print_message
-
 
 class Object(object):
   pass

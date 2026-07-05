@@ -119,7 +119,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
             })
 
         if decompose:
-            assert self.plaid_mode == True, "Decomposed search is only supported in PLAID mode"
+            assert self.plaid_mode, "Decomposed search is only supported in PLAID mode"
             assert not query_encoded, "Decomposed search is not compatible with pre-encoded queries"
             return self.plaid_candidate_generation() >> self.plaid_centroid_interaction() >> self.plaid_centroid_pruning() >> self.plaid_final_scoring(k=k)
         return pt.apply.by_query(_search_query_encoded if query_encoded else _search, add_ranks=False, label="PLAID" if self.plaid_mode else "ColBERTv2")

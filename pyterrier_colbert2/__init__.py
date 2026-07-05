@@ -1,6 +1,6 @@
 
-from . import ranking
-from . import indexing
+from . import ranking as ranking
+from . import indexing as indexing
 
 
 def load_checkpoint(path, model, optimizer=None, do_print=True):

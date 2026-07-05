@@ -1,17 +1,15 @@
-import math, torch
+import math
+import torch
 import torch.nn.functional as F
-from typing import Literal, Optional, List, Tuple
+from typing import Literal, Optional, List, Tuple, Dict
 import pyterrier as pt
 import pandas as pd
 from collections import Counter, defaultdict
 from pyterrier_colbert2.utils import suppress_amp_autocast_warning
-import math
-from typing import List, Optional
-import torch
-import pandas as pd, torch
-import torch.nn.functional as F
-import pyterrier as pt
 from colbert.modeling.tokenization import DocTokenizer
+from collections import defaultdict
+from tqdm import tqdm
+import json
 
 def mmr_select_unified(
     V: torch.Tensor,                 # [M, d] PRF token vectors (L2-normalised, same device)
@@ -265,12 +263,7 @@ def plaid_prf(
 # build global stats
 ##########################
 
-import math
-from collections import defaultdict
-from typing import Dict, Tuple
-import torch
-from tqdm import tqdm
-import json
+
 
 # @torch.no_grad()
 def build_global_code_stats(index,
@@ -305,7 +298,8 @@ def build_global_code_stats(index,
         if not (index.path / fname).exists():
             exists_ok = False
     if exists_ok:
-        _read_json = lambda path: json.load(open(path, "r", encoding="utf-8") )
+        def _read_json(path):
+            return json.load(open(path, "r", encoding="utf-8"))
         idf_map = _read_json(index.path / "idf_map.json")
         df_map  = _read_json(index.path / "df_map.json")
         cf_map  = _read_json(index.path / "cf_map.json")
@@ -671,11 +665,6 @@ def mmr_select(
     return selected
 
 
-
-import math
-from typing import List, Optional
-import torch
-
 def mmr_select_with_query(
     V: torch.Tensor,                 # [M, d]  PRF token vectors (L2-normalised, same device)
     rel: torch.Tensor,               # [M]     relevance scores (same device as V)
@@ -745,10 +734,6 @@ def mmr_select_with_query(
         Sel = V[i:i+1] if Sel is None else torch.cat([Sel, V[i:i+1]], dim=0)
 
     return selected
-
-import math
-from typing import List, Optional
-import torch
 
 def mmr_select_unified(
     V: torch.Tensor,                 # [M, d] PRF token vectors (L2-normalised, same device)
