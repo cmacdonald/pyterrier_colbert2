@@ -29,12 +29,12 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ${{ env.pythonLocation }}
-        key: ${{ env.runtag }}-${{ hashFiles('requirements.txt', 'requirements_dev.txt') }}
+        key: ${{ env.runtag }}-${{ hashFiles('requirements.txt') }}
 
     - name: Install Dependencies
       run: |
-        pip install --upgrade -r requirements.txt -r requirements_dev.txt
+        pip install --upgrade -r requirements.txt
         pip install -e .
 
     - name: Ruff
-      run: 'ruff check --output-format=github pyterrier_rag'
+      run: 'ruff check --output-format=github pyterrier_dr'
