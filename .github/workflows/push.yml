@@ -50,11 +50,9 @@ jobs:
         conda install pip
         conda install mkl_fft -y
         conda install -c pytorch -c conda-forge faiss-cpu
-        pip install --upgrade --upgrade-strategy eager git+https://github.com/terrier-org/pyterrier.git#egg=pyterrier torch
-        pip install --upgrade --upgrade-strategy eager -r requirements.txt
         #install this software
         pip install --timeout=120 .
-        pip install --upgrade --upgrade-strategy eager pytest
+        pip install --upgrade --upgrade-strategy eager  -r requirements-test.txt pytest
         conda list
 
     - name: All unit tests
