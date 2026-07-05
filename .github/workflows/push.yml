@@ -33,11 +33,11 @@ jobs:
         activate-conda: true
 
         # follows https://medium.com/ai2-blog/python-caching-in-github-actions-e9452698e98d
-    - name: Loading Python & dependencies from cache
-      uses: actions/cache@v3
-      with:
-        path: /usr/share/miniconda/lib/python3.8/site-packages/
-        key: /usr/share/miniconda/lib/python3.8/site-packages/-${{ hashFiles('requirements.txt') }}
+    # - name: Loading Python & dependencies from cache
+    #   uses: actions/cache@v3
+    #   with:
+    #     path: /usr/share/miniconda/lib/python3.8/site-packages/
+    #     key: /usr/share/miniconda/lib/python3.8/site-packages/-${{ hashFiles('requirements.txt') }}
 
     - name: Loading Torch models from cache
       uses: actions/cache@v3
@@ -49,6 +49,7 @@ jobs:
       run: |
         conda install pip
         conda install mkl_fft -y
+        conda install conda install pytorch::pytorch
         conda install -c pytorch -c conda-forge faiss-cpu
         #install this software
         pip install --timeout=120 .
