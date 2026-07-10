@@ -90,7 +90,7 @@ class ColBERTModelOnlyFactory():
                 return pd.DataFrame(columns=set(["docno", "text", "doc_embs"]) | set(df.columns))
             with torch.no_grad():
                 rtr_embs = []
-                rtr_toks = []
+                #rtr_toks = []
                 for chunk in chunker(df, batch_size):
                     embsD = self.args.inference.docFromText(chunk.text.tolist())
                     if detach:

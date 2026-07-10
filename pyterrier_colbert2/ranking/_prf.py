@@ -1,17 +1,14 @@
-import math, torch
+import math
+import torch
 import torch.nn.functional as F
-from typing import Literal, Optional, List, Tuple
+from typing import Literal, Optional, List, Tuple, Dict
 import pyterrier as pt
 import pandas as pd
 from collections import Counter, defaultdict
 from pyterrier_colbert2.utils import suppress_amp_autocast_warning
-import math
-from typing import List, Optional
-import torch
-import pandas as pd, torch
-import torch.nn.functional as F
-import pyterrier as pt
 from colbert.modeling.tokenization import DocTokenizer
+from tqdm import tqdm
+import json
 
 def plaid_prf_end_to_end(factory, k=1000, **kwargs):
     return plaid_prf(factory, **kwargs) >> factory.end_to_end(k=k, query_encoded=True)
@@ -197,12 +194,7 @@ def plaid_prf(
 # build global stats
 ##########################
 
-import math
-from collections import defaultdict
-from typing import Dict, Tuple
-import torch
-from tqdm import tqdm
-import json
+
 
 # @torch.no_grad()
 def build_global_code_stats(index,
@@ -237,7 +229,8 @@ def build_global_code_stats(index,
         if not (index.path / fname).exists():
             exists_ok = False
     if exists_ok:
-        _read_json = lambda path: json.load(open(path, "r", encoding="utf-8") )
+        def _read_json(path):
+            return json.load(open(path, "r", encoding="utf-8"))
         idf_map = _read_json(index.path / "idf_map.json")
         df_map  = _read_json(index.path / "df_map.json")
         cf_map  = _read_json(index.path / "cf_map.json")
@@ -322,7 +315,9 @@ def build_global_code_stats(index,
     cf_map = dict(cf_map)
 
     print("Storing global code statistics in index for future reuse...")
-    _write_json = lambda path, data: json.dump(data, open(path, "w", encoding="utf-8"))
+    def _write_json(path, data):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
     _write_json(index.path / "idf_map.json", idf_map)
     _write_json(index.path / "df_map.json", dict(df_map))
     _write_json(index.path / "cf_map.json", dict(cf_map))
@@ -374,9 +369,8 @@ def to_per_occurrence(weights_by_code: dict, codes_1d: torch.Tensor):
     # codes_1d: CPU Long [M]
     # 把 dict 转换为list
     out = []
-    get = weights_by_code.get
     for j, c in enumerate(codes_1d.tolist()):
-        out.append((float(get(c, 0.0)), j))
+        out.append((float(weights_by_code.get(c, 0.0)), j))
     return out
 
 
@@ -492,7 +486,8 @@ def  build_wpids_and_keepmask_from_corpus(
         try:
             df = dataset.get_corpus()
             row = df.loc[df['docno'] == docno]
-            if len(row) > 0: return row.iloc[0]['text']
+            if len(row) > 0: 
+                return row.iloc[0]['text']
         except Exception:
             pass
         for rec in dataset.get_corpus_iter():
@@ -521,7 +516,8 @@ def  build_wpids_and_keepmask_from_corpus(
         Ti = int(ids.size(1))
         Ki = min(Li, Ti)                           # align to min
         if Ki > 0:
-            s = int(offs[i]); e = s + Ki
+            s = int(offs[i])
+            e = s + Ki
             keep_mask[s:e] = True
             wp_chunks.append(ids[0, :Ki].to(torch.long).cpu())
 
@@ -603,11 +599,6 @@ def mmr_select(
     return selected
 
 
-
-import math
-from typing import List, Optional
-import torch
-
 def mmr_select_with_query(
     V: torch.Tensor,                 # [M, d]  PRF token vectors (L2-normalised, same device)
     rel: torch.Tensor,               # [M]     relevance scores (same device as V)
@@ -677,10 +668,6 @@ def mmr_select_with_query(
         Sel = V[i:i+1] if Sel is None else torch.cat([Sel, V[i:i+1]], dim=0)
 
     return selected
-
-import math
-from typing import List, Optional
-import torch
 
 def mmr_select_unified(
     V: torch.Tensor,                 # [M, d] PRF token vectors (L2-normalised, same device)
