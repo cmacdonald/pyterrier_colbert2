@@ -40,7 +40,12 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         self.centroid_score_threshold = centroid_score_threshold
         self.ndocs = ndocs
         dirs = os.path.split(index_location)
-        self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
+        # self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
+        self.searcher = Searcher(
+                        dirs[-1],
+                        index_root=os.path.join(*dirs[0:-1]),
+                        checkpoint=colbert
+                    )
 
         if self.plaid_mode:
             self.searcher.configure(ncells=self.ncells,
@@ -75,20 +80,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                 Q = Q.cuda()
 
             # call colbert.Searcher or plaid if plaid_mode is True
-            # docids, ranks, scores = self.searcher.dense_search(Q, k=k)
-            # docnos = self.docnos.fwd[docids]
-
-            # let PLAID candidate generation see all query vectors
-            original_query_maxlen = self.searcher.config.query_maxlen
-            
-            try:
-                if self.plaid_mode:# and query_encoded:
-                    self.searcher.config.query_maxlen = int(Q.size(-2))
-            
-                docids, ranks, scores = self.searcher.dense_search(Q, k=k)
-            finally:
-                self.searcher.config.query_maxlen = original_query_maxlen
-            
+            docids, ranks, scores = self.searcher.dense_search(Q, k=k)
             docnos = self.docnos.fwd[docids]
             
 
