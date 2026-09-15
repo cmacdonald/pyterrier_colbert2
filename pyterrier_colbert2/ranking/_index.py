@@ -40,7 +40,13 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         self.centroid_score_threshold = centroid_score_threshold
         self.ndocs = ndocs
         dirs = os.path.split(index_location)
-        self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
+        # self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
+        self.searcher = Searcher(
+                        dirs[-1],
+                        index_root=os.path.join(*dirs[0:-1]),
+                        checkpoint=colbert
+                    )
+
         if self.plaid_mode:
             self.searcher.configure(ncells=self.ncells,
                                 centroid_score_threshold=self.centroid_score_threshold,
@@ -76,7 +82,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
             # call colbert.Searcher or plaid if plaid_mode is True
             docids, ranks, scores = self.searcher.dense_search(Q, k=k)
             docnos = self.docnos.fwd[docids]
-
+            
             # ignore the ranks returned by the searcher and re-assign them based on the sorted order of scores, 
             # to ensure consistency between colbertv2 and plaid modes. This is because in plaid mode, the searcher 
             # may return fewer than k results due to pruning; also ensures they start at pt.model.FIRST_RANK
