@@ -41,6 +41,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         self.ndocs = ndocs
         dirs = os.path.split(index_location)
         self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
+
         if self.plaid_mode:
             self.searcher.configure(ncells=self.ncells,
                                 centroid_score_threshold=self.centroid_score_threshold,
@@ -73,9 +74,19 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
             if torch.cuda.is_available():
                 Q = Q.cuda()
 
-            # call colbert.Searcher or plaid if plaid_mode is True
-            docids, ranks, scores = self.searcher.dense_search(Q, k=k)
+            # let PLAID candidate generation see all query vectors
+            original_query_maxlen = self.searcher.config.query_maxlen
+            
+            try:
+                if self.plaid_mode:
+                    self.searcher.config.query_maxlen = int(Q.size(-2))
+            
+                docids, ranks, scores = self.searcher.dense_search(Q, k=k)
+            finally:
+                self.searcher.config.query_maxlen = original_query_maxlen
+            
             docnos = self.docnos.fwd[docids]
+            
 
             # ignore the ranks returned by the searcher and re-assign them based on the sorted order of scores, 
             # to ensure consistency between colbertv2 and plaid modes. This is because in plaid mode, the searcher 
