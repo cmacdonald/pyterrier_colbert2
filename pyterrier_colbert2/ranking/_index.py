@@ -74,15 +74,11 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
             if torch.cuda.is_available():
                 Q = Q.cuda()
 
-            # call colbert.Searcher or plaid if plaid_mode is True
-            # docids, ranks, scores = self.searcher.dense_search(Q, k=k)
-            # docnos = self.docnos.fwd[docids]
-
             # let PLAID candidate generation see all query vectors
             original_query_maxlen = self.searcher.config.query_maxlen
             
             try:
-                if self.plaid_mode:# and query_encoded:
+                if self.plaid_mode:
                     self.searcher.config.query_maxlen = int(Q.size(-2))
             
                 docids, ranks, scores = self.searcher.dense_search(Q, k=k)
