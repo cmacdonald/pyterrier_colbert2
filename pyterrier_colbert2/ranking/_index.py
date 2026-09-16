@@ -40,7 +40,12 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
         self.centroid_score_threshold = centroid_score_threshold
         self.ndocs = ndocs
         dirs = os.path.split(index_location)
-        self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
+        # self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
+        self.searcher = Searcher(
+                        dirs[-1],
+                        index_root=os.path.join(*dirs[0:-1]),
+                        checkpoint=colbert
+                    )
 
         if self.plaid_mode:
             self.searcher.configure(ncells=self.ncells,
