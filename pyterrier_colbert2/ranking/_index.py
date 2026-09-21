@@ -32,8 +32,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
             if colbert is None:
                 colbert = self._meta.get('model_checkpoint', colbert)
 
-        # call both super-class constructors
-        # ColBERTModelOnlyFactory.__init__(self, colbert, **kwargs)
+        # call Artifact super-class constructors
         pt.Artifact.__init__(self, index_location)
         self.plaid_mode = plaid_mode
         self.ncells = ncells
@@ -48,7 +47,7 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                         checkpoint=colbert
                     )
         
-        # Reuse the checkpoint already loaded by Searcher
+        # Reuse the checkpoint already loaded by Searcher for calling the other super-class constructor
         ColBERTModelOnlyFactory.__init__(
             self,
             (
