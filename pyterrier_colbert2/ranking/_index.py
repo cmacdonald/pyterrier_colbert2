@@ -33,15 +33,31 @@ class ColBERTv2Index(ColBERTModelOnlyFactory, pt.Artifact):
                 colbert = self._meta.get('model_checkpoint', colbert)
 
         # call both super-class constructors
-        ColBERTModelOnlyFactory.__init__(self, colbert, **kwargs)
+        # ColBERTModelOnlyFactory.__init__(self, colbert, **kwargs)
         pt.Artifact.__init__(self, index_location)
         self.plaid_mode = plaid_mode
         self.ncells = ncells
         self.centroid_score_threshold = centroid_score_threshold
         self.ndocs = ndocs
         dirs = os.path.split(index_location)
-        self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
-
+        
+        # self.searcher = Searcher(dirs[-1], index_root=os.path.join(*dirs[0:-1]))
+        self.searcher = Searcher(
+                        dirs[-1],
+                        index_root=os.path.join(*dirs[0:-1]),
+                        checkpoint=colbert
+                    )
+        
+        # Reuse the checkpoint already loaded by Searcher
+        ColBERTModelOnlyFactory.__init__(
+            self,
+            (
+                self.searcher.checkpoint,
+                self.searcher.config.export(),
+            ),
+            **kwargs,
+        )
+        
         if self.plaid_mode:
             self.searcher.configure(ncells=self.ncells,
                                 centroid_score_threshold=self.centroid_score_threshold,
